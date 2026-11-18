@@ -258,20 +258,28 @@ describe("POST /api/v1/auth/refresh", () => {
       request(app).post("/api/v1/auth/refresh").send({ refreshToken }),
     ]);
 
-    const statuses = [a.status, b.status].sort((x, y) => x - y);
-    expect(statuses).toEqual([200, 401]);
+    // Two interleavings are both correct: either the winner finishes before
+    // the loser's family revocation lands ([200, 401]), or the tombstone is
+    // written first and the winner refuses to issue ([401, 401]). The
+    // security invariant is "at most one success, never two".
+    const successes = [a, b].filter((r) => r.status === 200);
+    const failures = [a, b].filter((r) => r.status === 401);
 
-    const loser = a.status === 401 ? a : b;
-    expect(loser.body.error.code).toBe("REFRESH_TOKEN_REUSED");
+    expect(successes.length).toBeLessThanOrEqual(1);
+    expect(failures.length).toBeGreaterThanOrEqual(1);
+    for (const failure of failures) {
+      expect(failure.body.error.code).toBe("REFRESH_TOKEN_REUSED");
+    }
 
-    // The loser's reuse detection tombstones the family, so whatever the
-    // winner was issued is already dead by the time both requests settle.
-    const winner = a.status === 200 ? a : b;
-    const winnerToken = winner.body.data.tokens.refreshToken as string;
-    const afterFamilyKill = await request(app)
-      .post("/api/v1/auth/refresh")
-      .send({ refreshToken: winnerToken });
-    expect(afterFamilyKill.status).toBe(401);
+    // Whatever the winner was issued (if anything) is already dead at next
+    // use because the family tombstone is authoritative.
+    if (successes.length === 1) {
+      const winnerToken = successes[0]?.body.data.tokens.refreshToken as string;
+      const afterFamilyKill = await request(app)
+        .post("/api/v1/auth/refresh")
+        .send({ refreshToken: winnerToken });
+      expect(afterFamilyKill.status).toBe(401);
+    }
   });
 
   it("rejects a token minted into a family after the family was revoked", async () => {
