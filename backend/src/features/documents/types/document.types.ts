@@ -50,3 +50,6 @@ export type CreateDocumentInput = Omit<
 > & { technologies?: string[] };
 
 export type UpdateDocumentInput = Partial<CreateDocumentInput>;
+
+/** Ingestion payload: contentHash is derived server-side, never supplied. */
+export type IngestDocumentInput = Omit<CreateDocumentInput, "contentHash">;

@@ -7,6 +7,7 @@ import { env } from "./config/env.js";
 import { logger } from "./config/logger.js";
 import healthRoutes from "./features/health/routes/health.routes.js";
 import authRoutes from "./features/auth/routes/auth.routes.js";
+import documentRoutes from "./features/documents/routes/document.routes.js";
 import {
   errorHandler,
   notFoundHandler,
@@ -49,10 +50,13 @@ app.use(
 
 app.use(pinoHttp({ logger }));
 
-app.use(express.json());
+// Document content is ingested as raw text, so the default 100kb JSON limit
+// is raised to a still-bounded 1mb for technical documentation payloads.
+app.use(express.json({ limit: "1mb" }));
 
 app.use("/api/v1/health", healthRoutes);
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/documents", documentRoutes);
 
 app.get("/", (_req, res) => {
   res.status(200).json({

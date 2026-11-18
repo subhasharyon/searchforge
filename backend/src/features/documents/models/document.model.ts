@@ -70,7 +70,16 @@ const documentSchema = new Schema<IDocument>(
       type: Date,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    // __v is a Mongoose-internal version key; keep it out of API responses.
+    toJSON: {
+      transform: (_doc, ret: Record<string, unknown>) => {
+        delete ret.__v;
+        return ret;
+      },
+    },
+  }
 );
 
 // Identity: a canonical URL is unique per source. The same URL may exist

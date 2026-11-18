@@ -5,3 +5,4 @@ export {
   type DocumentDocument,
 } from "./repositories/document.repository.js";
 export * as documentService from "./services/document.service.js";
+export * as ingestionService from "./services/ingestion.service.js";
