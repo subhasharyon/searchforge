@@ -38,6 +38,34 @@ const envSchema = z.object({
   KIBANA_SYSTEM_PASSWORD: z.string().optional(),
 
   REDIS_URL: z.url(),
+
+  JWT_ACCESS_SECRET: z.string().min(32),
+  JWT_REFRESH_SECRET: z.string().min(32),
+  // Express "trust proxy" topology. Empty/false: no proxy, X-Forwarded-For
+  // ignored (local dev / direct connections). "N": trust the N closest hops.
+  // IPs/subnets/predefined names ("loopback", "linklocal", "uniquelocal"),
+  // comma-separated: trust only those proxy addresses. "true" is forbidden.
+  TRUST_PROXY: z
+    .string()
+    .optional()
+    .refine(
+      (value) => value?.trim().toLowerCase() !== "true",
+      "TRUST_PROXY=true trusts arbitrary X-Forwarded-For and defeats rate limiting"
+    ),
+
+  // Max credential-endpoint requests per IP per 15 minutes (brute-force
+  // protection). Raised in the test env so suites aren't self-limiting.
+  AUTH_CREDENTIAL_RATE_LIMIT: z.coerce.number().int().positive().default(20),
+
+  // ms-style durations with an explicit unit, e.g. "15m", "7d".
+  JWT_ACCESS_TOKEN_TTL: z
+    .string()
+    .regex(/^\d+[smhdw]$/, "Expected e.g. '15m', '1h', '7d'")
+    .default("15m"),
+  JWT_REFRESH_TOKEN_TTL: z
+    .string()
+    .regex(/^\d+[smhdw]$/, "Expected e.g. '15m', '1h', '7d'")
+    .default("7d"),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
