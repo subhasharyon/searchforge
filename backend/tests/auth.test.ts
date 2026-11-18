@@ -2,7 +2,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
-import { MongoMemoryServer } from "mongodb-memory-server";
 import app from "../src/app.js";
 import { env } from "../src/config/env.js";
 import { UserModel } from "../src/features/users/models/user.model.js";
@@ -13,18 +12,10 @@ import {
 } from "../src/features/auth/services/token.service.js";
 import { refreshTokenRepository } from "../src/features/auth/repositories/refresh-token.repository.js";
 import { RevokedTokenFamilyModel } from "../src/features/auth/models/revoked-token-family.model.js";
+import { startTestDb, stopTestDb } from "./helpers/test-db.js";
 
-let mongo: MongoMemoryServer;
-
-beforeAll(async () => {
-  mongo = await MongoMemoryServer.create();
-  await mongoose.connect(mongo.getUri("searchforge_test"));
-});
-
-afterAll(async () => {
-  await mongoose.disconnect();
-  await mongo.stop();
-});
+beforeAll(startTestDb);
+afterAll(stopTestDb);
 
 beforeEach(async () => {
   // deleteMany preserves indexes (unlike dropDatabase)
