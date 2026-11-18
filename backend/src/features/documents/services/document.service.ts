@@ -4,6 +4,10 @@ import {
   documentRepository,
   type DocumentDocument,
 } from "../repositories/document.repository.js";
+import {
+  removeDocumentFromIndex,
+  syncDocumentToIndex,
+} from "../../search/services/indexing.service.js";
 import type {
   CreateDocumentInput,
   UpdateDocumentInput,
@@ -18,9 +22,15 @@ const assertValidDocumentId = (id: string): void => {
   }
 };
 
-export const createDocument = (
+export const createDocument = async (
   input: CreateDocumentInput
-): Promise<DocumentDocument> => documentRepository.create(input);
+): Promise<DocumentDocument> => {
+  const doc = await documentRepository.create(input);
+  // MongoDB committed - now project into the search index. A sync failure
+  // is logged inside the wrapper and never fails the write.
+  await syncDocumentToIndex(doc);
+  return doc;
+};
 
 export const getDocumentById = async (
   id: string
@@ -63,6 +73,7 @@ export const updateDocument = async (
   if (!doc) {
     throw documentNotFound();
   }
+  await syncDocumentToIndex(doc);
   return doc;
 };
 
@@ -75,5 +86,6 @@ export const deleteDocument = async (
   if (!doc) {
     throw documentNotFound();
   }
+  await removeDocumentFromIndex(id);
   return doc;
 };

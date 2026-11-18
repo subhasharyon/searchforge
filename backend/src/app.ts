@@ -9,6 +9,7 @@ import healthRoutes from "./features/health/routes/health.routes.js";
 import authRoutes from "./features/auth/routes/auth.routes.js";
 import documentRoutes from "./features/documents/routes/document.routes.js";
 import crawlerRoutes from "./features/crawler/routes/crawler.routes.js";
+import searchRoutes from "./features/search/routes/search.routes.js";
 import {
   errorHandler,
   notFoundHandler,
@@ -59,6 +60,7 @@ app.use("/api/v1/health", healthRoutes);
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/documents", documentRoutes);
 app.use("/api/v1/crawler", crawlerRoutes);
+app.use("/api/v1/search", searchRoutes);
 
 app.get("/", (_req, res) => {
   res.status(200).json({
