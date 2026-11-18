@@ -11,25 +11,26 @@ export type DocumentDocument = HydratedDocument<IDocument>;
 
 const MONGO_DUPLICATE_KEY_CODE = 11000;
 
+const isDuplicateKeyError = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  "code" in error &&
+  error.code === MONGO_DUPLICATE_KEY_CODE;
+
+const duplicateDocumentError = (): AppError =>
+  // (source, url) or (source, sourceId) uniqueness violated.
+  new AppError(
+    "A document with this identity already exists",
+    409,
+    "DOCUMENT_ALREADY_EXISTS"
+  );
+
 export const documentRepository = {
   create: async (data: CreateDocumentInput): Promise<DocumentDocument> => {
     try {
       return await DocumentModel.create(data);
     } catch (error) {
-      if (
-        typeof error === "object" &&
-        error !== null &&
-        "code" in error &&
-        error.code === MONGO_DUPLICATE_KEY_CODE
-      ) {
-        // (source, url) or (source, sourceId) uniqueness violated.
-        throw new AppError(
-          "A document with this identity already exists",
-          409,
-          "DOCUMENT_ALREADY_EXISTS"
-        );
-      }
-      throw error;
+      throw isDuplicateKeyError(error) ? duplicateDocumentError() : error;
     }
   },
 
@@ -49,14 +50,19 @@ export const documentRepository = {
       url: url.trim(),
     }).exec(),
 
-  updateById: (
+  updateById: async (
     id: string,
     update: UpdateDocumentInput
-  ): Promise<DocumentDocument | null> =>
-    DocumentModel.findByIdAndUpdate(id, update, {
-      returnDocument: "after",
-      runValidators: true,
-    }).exec(),
+  ): Promise<DocumentDocument | null> => {
+    try {
+      return await DocumentModel.findByIdAndUpdate(id, update, {
+        returnDocument: "after",
+        runValidators: true,
+      }).exec();
+    } catch (error) {
+      throw isDuplicateKeyError(error) ? duplicateDocumentError() : error;
+    }
+  },
 
   deleteById: (id: string): Promise<DocumentDocument | null> =>
     DocumentModel.findByIdAndDelete(id).exec(),
