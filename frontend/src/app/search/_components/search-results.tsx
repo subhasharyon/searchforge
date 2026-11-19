@@ -1,6 +1,9 @@
+import Link from "next/link"
 import { ExternalLink } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
+import { displayHost, formatDate } from "@/lib/format"
+import { safeHttpUrl } from "@/lib/documents"
 import { highlightToHtml } from "@/lib/highlight"
 import type { SearchResponse, SearchResultItem } from "@/types/search"
 
@@ -8,27 +11,13 @@ function HighlightedText({ html }: { html: string }) {
   return <span dangerouslySetInnerHTML={{ __html: html }} />
 }
 
-function displayHost(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "")
-  } catch {
-    return url
-  }
-}
-
-function formatDate(iso: string): string | null {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) {
-    return null
-  }
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date)
-}
-
-function ResultCard({ result }: { result: SearchResultItem }) {
+function ResultCard({
+  result,
+  from,
+}: {
+  result: SearchResultItem
+  from: string
+}) {
   const titleHtml = result.highlights.title[0]
     ? highlightToHtml(result.highlights.title[0])
     : null
@@ -38,23 +27,32 @@ function ResultCard({ result }: { result: SearchResultItem }) {
     .join(" … ")
   const updated = formatDate(result.updatedAt)
   const published = result.publishedAt ? formatDate(result.publishedAt) : null
+  const externalUrl = safeHttpUrl(result.url)
+  const detailHref = `/documents/${encodeURIComponent(result.id)}?from=${encodeURIComponent(from)}`
 
   return (
     <article className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-foreground/20 sm:p-5">
-      <a
-        href={result.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="group inline-flex max-w-full items-baseline gap-1.5 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-      >
-        <h2 className="text-[15px] leading-6 font-medium text-balance text-foreground group-hover:text-brand">
-          {titleHtml ? <HighlightedText html={titleHtml} /> : result.title}
-        </h2>
-        <ExternalLink
-          className="size-3.5 shrink-0 translate-y-0.5 self-center text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100"
-          aria-hidden
-        />
-      </a>
+      <div className="flex items-start justify-between gap-3">
+        <Link
+          href={detailHref}
+          className="group min-w-0 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
+          <h2 className="text-[15px] leading-6 font-medium text-balance text-foreground group-hover:text-brand">
+            {titleHtml ? <HighlightedText html={titleHtml} /> : result.title}
+          </h2>
+        </Link>
+        {externalUrl ? (
+          <a
+            href={externalUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`Open original at ${displayHost(externalUrl)}`}
+            className="mt-1 shrink-0 rounded-sm text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+          >
+            <ExternalLink className="size-3.5" aria-hidden />
+          </a>
+        ) : null}
+      </div>
       <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground/80">
         {displayHost(result.url)}
       </p>
@@ -91,9 +89,11 @@ function ResultCard({ result }: { result: SearchResultItem }) {
 export function SearchResults({
   data,
   query,
+  from,
 }: {
   data: SearchResponse
   query?: string
+  from: string
 }) {
   return (
     <div>
@@ -109,7 +109,7 @@ export function SearchResults({
       </p>
       <div className="mt-4 space-y-3">
         {data.results.map((result) => (
-          <ResultCard key={result.id} result={result} />
+          <ResultCard key={result.id} result={result} from={from} />
         ))}
       </div>
     </div>
