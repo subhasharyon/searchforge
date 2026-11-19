@@ -92,7 +92,11 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
               {data.results.length > 0 ? (
                 <>
                   <div className={filterCount > 0 ? "mt-4" : undefined}>
-                    <SearchResults data={data} query={query || undefined} />
+                    <SearchResults
+                      data={data}
+                      query={query || undefined}
+                      from={buildSearchHref(params)}
+                    />
                   </div>
                   <Pagination pagination={data.pagination} params={params} />
                 </>

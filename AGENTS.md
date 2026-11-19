@@ -67,6 +67,17 @@ Backend search contract: `q?` (empty → match_all newest-first), `page`,
 raw `<mark>` tags — render only via `src/lib/highlight.ts`
 (`highlightToHtml`), never raw `dangerouslySetInnerHTML`.
 
+Document pages: `GET /api/v1/documents/:id` (same auth) returns
+`{ success, data: { document } }`. The search hit `id` is the MongoDB
+`_id` (ES doc id strategy in `indexing.service.ts`), so result cards link
+straight to `/documents/[id]?from=<current /search href>`. The page is a
+server component fetching via `getDocumentById` in
+`src/lib/api/documents.ts` (React `cache`-deduped with
+`generateMetadata`). ID is validated as 24-hex before fetching;
+`from` is whitelisted to `/search*` by `sanitizeReturnPath` and external
+URLs pass `safeHttpUrl` (http/https only) — all in `src/lib/documents.ts`.
+Document `content` is plain text — rendered as text only, never HTML.
+
 ## Security notes
 
 ### `trust proxy` (src/app.ts, `TRUST_PROXY` env)
