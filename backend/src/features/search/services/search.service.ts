@@ -5,6 +5,7 @@ import { getSearchClient } from "./es-client.provider.js";
 import type {
   EsHit,
   SearchDeps,
+  SearchRankingConfig,
   SearchResponse,
   SearchResultItem,
 } from "../types/search.types.js";
@@ -26,7 +27,22 @@ export const MAX_RESULT_WINDOW = 10_000;
  *  - empty `q` degrades to match_all sorted by updatedAt desc, i.e.
  *    "browse latest".
  */
-const buildEsQuery = (query: SearchQuery): Record<string, unknown> => {
+
+/**
+ * Production ranking defaults. Evaluation experiments inject variants
+ * through SearchDeps.searchConfig without touching this path.
+ */
+
+export const DEFAULT_SEARCH_RANKING: SearchRankingConfig = {
+  titleBoost: 3,
+  contentBoost: 1,
+  technologiesBoost: 2,
+};
+
+const buildEsQuery = (
+  query: SearchQuery,
+  ranking: SearchRankingConfig = DEFAULT_SEARCH_RANKING
+): Record<string, unknown> => {
   const must: Record<string, unknown>[] = [];
   const should: Record<string, unknown>[] = [];
   const filter: Record<string, unknown>[] = [];
@@ -35,12 +51,17 @@ const buildEsQuery = (query: SearchQuery): Record<string, unknown> => {
     must.push({
       multi_match: {
         query: query.q,
-        fields: ["title^3", "content"],
+        fields: [`title^${ranking.titleBoost}`, `content^${ranking.contentBoost}`],
         type: "best_fields",
       },
     });
     should.push({
-      term: { technologies: { value: query.q.toLowerCase(), boost: 2 } },
+      term: {
+        technologies: {
+          value: query.q.toLowerCase(),
+          boost: ranking.technologiesBoost,
+        },
+      },
     });
   } else {
     must.push({ match_all: {} });
@@ -119,7 +140,7 @@ export const searchDocuments = async (
       from,
       size: query.limit,
       track_total_hits: true,
-      query: buildEsQuery(query),
+      query: buildEsQuery(query, deps.searchConfig),
       // match_all browsing gets a deterministic newest-first order;
       // relevance searches keep _score ordering.
       ...(query.q

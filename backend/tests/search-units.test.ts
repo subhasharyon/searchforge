@@ -446,7 +446,7 @@ describe("searchDocuments query construction", () => {
       {
         multi_match: {
           query: "streams",
-          fields: ["title^3", "content"],
+          fields: ["title^3", "content^1"],
           type: "best_fields",
         },
       },
