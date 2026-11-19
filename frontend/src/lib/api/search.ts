@@ -1,4 +1,4 @@
-import { authorizedJson } from "@/lib/api/client";
+import { authorizedJson } from "@/lib/api/authorized";
 import type { SearchResponse } from "@/types/search";
 
 export interface SearchParams {

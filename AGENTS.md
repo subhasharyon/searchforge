@@ -39,25 +39,39 @@ Run from `frontend/`:
   `src/lib/motion.ts`.
 - `frontend/AGENTS.md` is auto-managed by `next dev` — do not edit/remove it.
 
-### Frontend → backend API
+### Frontend authentication (M6.9)
 
-The backend search API (`GET /api/v1/search`) requires
-`Authorization: Bearer <access token>` — search is never public. The
-`/search` page is a **server component** that calls the backend through a
-server-side client (`src/lib/api/client.ts`, `src/lib/api/search.ts`);
-nothing reaches the browser, so CORS and credential exposure are non-issues.
+The browser holds only an **opaque session id** in the `sf_session`
+cookie (HttpOnly, SameSite=Lax, Secure in prod, 7d). JWTs never reach
+client JavaScript: tokens live in a server-side store (`globalThis` map
+in `src/lib/session.ts`) keyed by that id. Per-user refresh is
+single-flighted in the data layer — this avoids both the
+can't-Set-Cookie-in-RSC problem and the backend's concurrent-rotation
+tombstone. Store is in-memory: restart = everyone logs in again (fail
+closed).
 
-Auth uses a dedicated **service account** (real `/auth/login` +
-`/auth/refresh`, cached in module scope with single-flight rotation and
-one 401 retry). Required server-only env vars (see
-`frontend/.env.example`):
+- `src/lib/session.ts` — store, `getSession`, `getSessionAccessToken`
+  (lazy refresh), `requireSession` (guard → `/login?next=`), cookie
+  create/destroy, `sanitizeNextPath` (open-redirect guard)
+- `src/lib/api/authorized.ts` — `authorizedJson` attaches the **user's**
+  Bearer token (401 → one forced refresh + retry)
+- `src/lib/api/auth.ts` — backend `/auth/*` endpoint calls
+- `src/lib/actions/auth.ts` — server actions `login/register/logout`
+- `src/app/(auth)/` — login + register pages (useActionState forms)
+- `src/lib/api/client.ts` — primitives + `serviceJson` (**internal
+  server-to-server only** — never for user-facing routes)
 
-- `SEARCH_API_URL` — backend base URL
-- `SEARCH_API_EMAIL` / `SEARCH_API_PASSWORD` — service account
+Identity reaches Express as the user's own access token — the backend
+`authenticate` middleware resolves the real user, so authorization is
+enforced server-side. Authorization model: shared index — any
+authenticated user may search/read all documents (documented
+limitation; `authorize(roles)` exists for future RBAC). Protected
+pages call `requireSession`; `/login` & `/register` redirect to `next`
+when already authed.
 
-Dev credentials live in `frontend/.env.local` (gitignored). The dev
-service account is `search-ui@searchforge.dev` (registered via
-`POST /api/v1/auth/register`).
+Required server-only env vars (see `frontend/.env.example`):
+`SEARCH_API_URL` (backend base URL), `SEARCH_API_EMAIL` /
+`SEARCH_API_PASSWORD` (service account — internal ops only).
 
 Backend search contract: `q?` (empty → match_all newest-first), `page`,
 `limit` ≤ 50, plus `category`/`source`/`technology`/`contentType` filters

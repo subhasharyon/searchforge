@@ -4,6 +4,7 @@ import { ChevronDown, SlidersHorizontal } from "lucide-react"
 import { SearchBox } from "@/components/shared/search-box"
 import { Badge } from "@/components/ui/badge"
 import { searchDocuments } from "@/lib/api/search"
+import { requireSession } from "@/lib/session"
 import {
   activeFilterCount,
   buildSearchHref,
@@ -27,6 +28,7 @@ export const metadata: Metadata = {
 
 export default async function SearchPage({ searchParams }: PageProps<"/search">) {
   const params = parseSearchParams(await searchParams)
+  await requireSession(buildSearchHref(params))
   const query = params.q ?? ""
   const filterCount = activeFilterCount(params)
   const searching = Boolean(query) || filterCount > 0
@@ -47,6 +49,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
 
   return (
     <section className="mx-auto w-full max-w-5xl flex-1 px-4 pt-10 pb-16 sm:px-6 sm:pt-14">
+      <h1 className="sr-only">Search technical documentation</h1>
       <SearchBox defaultValue={query} className="mx-auto max-w-2xl" />
       <div className="mt-8 lg:grid lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-10">
         {/* Collapsible filters on small screens — native details, no JS. */}

@@ -44,7 +44,7 @@ export function ActiveFilters({ params }: { params: SearchUrlParams }) {
           className="group inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand/10 py-1 pr-2 pl-2.5 text-xs font-medium text-foreground outline-none transition-colors hover:border-brand/50 focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           <span className="text-muted-foreground">{LABELS[key]}:</span>
-          {value}
+          <span className="max-w-40 truncate sm:max-w-none">{value}</span>
           <X
             className="size-3 text-muted-foreground transition-colors group-hover:text-foreground"
             aria-hidden
