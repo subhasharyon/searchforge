@@ -37,7 +37,7 @@ function ResultCard({
           href={detailHref}
           className="group min-w-0 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
-          <h2 className="text-[15px] leading-6 font-medium text-balance text-foreground group-hover:text-brand">
+          <h2 className="text-[15px] leading-6 font-medium text-balance [overflow-wrap:break-word] text-foreground group-hover:text-brand">
             {titleHtml ? <HighlightedText html={titleHtml} /> : result.title}
           </h2>
         </Link>

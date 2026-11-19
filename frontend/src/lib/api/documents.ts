@@ -1,6 +1,6 @@
 import { cache } from "react"
 
-import { authorizedJson } from "@/lib/api/client"
+import { authorizedJson } from "@/lib/api/authorized"
 import type { DocumentDetail } from "@/types/document"
 
 async function fetchDocumentById(id: string): Promise<DocumentDetail> {

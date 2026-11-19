@@ -10,6 +10,7 @@ import {
   safeHttpUrl,
   sanitizeReturnPath,
 } from "@/lib/documents"
+import { requireSession } from "@/lib/session"
 import { displayHost, formatDate } from "@/lib/format"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -71,6 +72,11 @@ export default async function DocumentPage({
   }
 
   const backHref = sanitizeReturnPath(rawSearchParams.from)
+  const selfHref =
+    rawSearchParams.from && backHref !== "/search"
+      ? `/documents/${id}?from=${encodeURIComponent(backHref)}`
+      : `/documents/${id}`
+  await requireSession(selfHref)
 
   let document: DocumentDetail | null = null
   let failure: unknown = null
@@ -123,7 +129,7 @@ export default async function DocumentPage({
           </Badge>
         </div>
 
-        <h1 className="mt-4 text-2xl leading-9 font-semibold tracking-tight text-balance text-foreground sm:text-3xl sm:leading-10">
+        <h1 className="mt-4 text-2xl leading-9 font-semibold tracking-tight text-balance [overflow-wrap:break-word] text-foreground sm:text-3xl sm:leading-10">
           {document.title}
         </h1>
 
@@ -145,8 +151,10 @@ export default async function DocumentPage({
 
         <Separator className="mt-6" />
 
-        {/* content is plain text — rendered as text only, never as HTML. */}
-        <div className="mt-6 rounded-xl border border-border/60 bg-card px-5 py-6 text-[15px] leading-7 whitespace-pre-wrap text-foreground/90 sm:px-8 sm:py-8">
+        {/* content is plain text — rendered as text only, never as HTML.
+            overflow-wrap keeps long unbroken tokens (URLs, hashes) from
+            overflowing the card on narrow screens. */}
+        <div className="mt-6 rounded-xl border border-border/60 bg-card px-5 py-6 text-[15px] leading-7 whitespace-pre-wrap [overflow-wrap:break-word] text-foreground/90 sm:px-8 sm:py-8">
           {document.content}
         </div>
 

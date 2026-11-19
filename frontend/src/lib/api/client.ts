@@ -1,15 +1,17 @@
 /**
- * Server-only client for the SearchForge backend API.
+ * Server-only client primitives for the SearchForge backend API.
  *
  * All env vars are read lazily at call time (never at module scope) and are
  * server-only — none of them may ever use the NEXT_PUBLIC_ prefix.
  *
- * The backend search API requires a Bearer access token. Since user-facing
- * auth is out of scope, the Next.js server authenticates itself with a
- * dedicated service account via the existing /auth/login + /auth/refresh
- * endpoints. Tokens are cached in module scope (one service session shared
- * by all requests), rotated per the backend's refresh-token contract, and
- * a single retry re-authenticates on 401.
+ * Authentication for user-facing requests lives in lib/session.ts +
+ * lib/api/authorized.ts: the browser holds an opaque session cookie and
+ * the user's own Bearer token is attached server-side.
+ *
+ * `serviceJson` below retains the service-account login for legitimate
+ * server-to-server operations only (e.g. maintenance calls). User-facing
+ * routes must use authorizedJson — never the service account — so the
+ * backend always sees the end user's identity and permissions.
  */
 
 import type { ApiErrorBody, ApiSuccess, AuthTokens } from "@/types/api";
@@ -51,19 +53,10 @@ function baseUrl(): string {
   return url;
 }
 
-function serviceCredentials(): { email: string; password: string } {
-  const email = process.env.SEARCH_API_EMAIL?.trim();
-  const password = process.env.SEARCH_API_PASSWORD;
-  if (!email || !password) {
-    throw new ApiError(
-      "config",
-      "SEARCH_API_EMAIL / SEARCH_API_PASSWORD are not configured"
-    );
-  }
-  return { email, password };
-}
-
-async function rawFetch(path: string, init: RequestInit): Promise<Response> {
+export async function rawFetch(
+  path: string,
+  init: RequestInit
+): Promise<Response> {
   try {
     return await fetch(`${baseUrl()}${path}`, {
       ...init,
@@ -77,7 +70,10 @@ async function rawFetch(path: string, init: RequestInit): Promise<Response> {
   }
 }
 
-async function parseEnvelope<T>(res: Response, path: string): Promise<T> {
+export async function parseEnvelope<T>(
+  res: Response,
+  path: string
+): Promise<T> {
   let body: unknown;
   try {
     body = await res.json();
@@ -109,19 +105,34 @@ async function parseEnvelope<T>(res: Response, path: string): Promise<T> {
 }
 
 /* ------------------------------------------------------------------ */
-/* Service-account session                                             */
+/* Internal service-account session (system-to-server use only)        */
 /* ------------------------------------------------------------------ */
 
-interface Session {
+function serviceCredentials(): { email: string; password: string } {
+  const email = process.env.SEARCH_API_EMAIL?.trim();
+  const password = process.env.SEARCH_API_PASSWORD;
+  if (!email || !password) {
+    throw new ApiError(
+      "config",
+      "SEARCH_API_EMAIL / SEARCH_API_PASSWORD are not configured"
+    );
+  }
+  return { email, password };
+}
+
+interface ServiceSession {
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
 }
 
-let session: Session | null = null;
-let authInFlight: Promise<Session> | null = null;
+let serviceSession: ServiceSession | null = null;
+let serviceAuthInFlight: Promise<ServiceSession> | null = null;
 
-async function postTokens(path: string, payload: unknown): Promise<Session> {
+async function postServiceTokens(
+  path: string,
+  payload: unknown
+): Promise<ServiceSession> {
   const res = await rawFetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -154,59 +165,65 @@ async function postTokens(path: string, payload: unknown): Promise<Session> {
   };
 }
 
-async function authenticate(): Promise<Session> {
-  if (authInFlight) {
-    return authInFlight;
+async function authenticateService(): Promise<ServiceSession> {
+  if (serviceAuthInFlight) {
+    return serviceAuthInFlight;
   }
 
-  authInFlight = (async () => {
-    if (session?.refreshToken) {
+  serviceAuthInFlight = (async () => {
+    if (serviceSession?.refreshToken) {
       try {
-        session = await postTokens("/api/v1/auth/refresh", {
-          refreshToken: session.refreshToken,
+        serviceSession = await postServiceTokens("/api/v1/auth/refresh", {
+          refreshToken: serviceSession.refreshToken,
         });
-        return session;
+        return serviceSession;
       } catch {
-        // Refresh token expired or the family was revoked — fall back to
-        // a fresh service-account login.
+        // Refresh token expired or the family was revoked — fresh login.
       }
     }
     const { email, password } = serviceCredentials();
-    session = await postTokens("/api/v1/auth/login", { email, password });
-    return session;
+    serviceSession = await postServiceTokens("/api/v1/auth/login", {
+      email,
+      password,
+    });
+    return serviceSession;
   })();
 
   try {
-    return await authInFlight;
+    return await serviceAuthInFlight;
   } finally {
-    authInFlight = null;
+    serviceAuthInFlight = null;
   }
 }
 
-async function getAccessToken(): Promise<string> {
-  if (session && session.expiresAt - Date.now() > TOKEN_EXPIRY_MARGIN_MS) {
-    return session.accessToken;
+async function getServiceAccessToken(): Promise<string> {
+  if (
+    serviceSession &&
+    serviceSession.expiresAt - Date.now() > TOKEN_EXPIRY_MARGIN_MS
+  ) {
+    return serviceSession.accessToken;
   }
-  return (await authenticate()).accessToken;
+  return (await authenticateService()).accessToken;
 }
 
 /**
- * Performs an authenticated JSON request against the backend API.
- * On a 401 the cached session is dropped and the request is retried once
- * with a freshly obtained token.
+ * Authenticated request using the internal service account — for
+ * server-to-server operations ONLY (indexing, maintenance). It bypasses
+ * per-user authorization by design, so it must never back user-facing
+ * pages or actions.
  */
-export async function authorizedJson<T>(
+export async function serviceJson<T>(
   path: string,
   { retry = true }: { retry?: boolean } = {}
 ): Promise<T> {
-  const token = await getAccessToken();
+  const token = await getServiceAccessToken();
   const res = await rawFetch(path, {
     headers: { Authorization: `Bearer ${token}` },
   });
 
   if (res.status === 401 && retry) {
-    session = null;
-    return authorizedJson<T>(path, { retry: false });
+    serviceSession = null;
+    return serviceJson<T>(path, { retry: false });
   }
 
   return parseEnvelope<T>(res, path);

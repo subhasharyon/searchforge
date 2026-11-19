@@ -20,7 +20,7 @@ export function Pagination({
   return (
     <nav
       aria-label="Search results pagination"
-      className="mt-6 flex items-center justify-between gap-3"
+      className="mt-6 flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
     >
       <p className="text-xs text-muted-foreground">
         Page {page} of {totalPages} ·{" "}
