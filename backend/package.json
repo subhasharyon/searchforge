@@ -11,7 +11,9 @@
     "lint": "oxlint",
     "test": "vitest run",
     "test:watch": "vitest",
-    "setup:es": "tsx scripts/setup-es-app-user.ts"
+    "setup:es": "tsx scripts/setup-es-app-user.ts",
+    "seed:eval": "tsx scripts/seed-eval-corpus.ts",
+    "evaluate": "tsx scripts/run-evaluation.ts"
   },
   "engines": {
     "node": ">=20"

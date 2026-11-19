@@ -128,6 +128,19 @@ export interface EsClientLike {
   }): Promise<EsSearchResponse>;
 }
 
+/**
+ * Ranking tunables. The production defaults live in
+ * search.service.ts (DEFAULT_SEARCH_RANKING); evaluation experiments
+ * inject variants through SearchDeps.searchConfig.
+ */
+export interface SearchRankingConfig {
+  titleBoost: number;
+  contentBoost: number;
+  technologiesBoost: number;
+}
+
 export interface SearchDeps {
   client?: EsClientLike;
+  /** Ranking overrides; unset means production defaults. */
+  searchConfig?: SearchRankingConfig;
 }
