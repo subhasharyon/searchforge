@@ -1,4 +1,4 @@
-import robotsParserImport = require("robots-parser");
+import robotsParserModule from "robots-parser";
 import { logger } from "../../../config/logger.js";
 import { fetchPage, type FetchOptions } from "./http-fetcher.service.js";
 import { FetchError } from "../types/crawler.types.js";
@@ -9,12 +9,14 @@ interface Robot {
   getSitemaps(): string[];
 }
 
-// The published d.ts does not expose a callable signature; at runtime the
-// package's module.exports is the parser function itself.
-const robotsParser = robotsParserImport as unknown as (
-  url: string,
-  contents: string
-) => Robot;
+// robots-parser is CommonJS whose module.exports IS the parser function.
+// Under NodeNext the default import yields module.exports at runtime while
+// the ambient d.ts models only the `export default` shape - so accept both
+// forms (bare function, or a namespace carrying it under `default`).
+const robotsParser = ((
+  (robotsParserModule as { default?: unknown }).default ??
+  robotsParserModule
+) as (url: string, contents: string) => Robot);
 
 /** robots directives are evaluated under this product token. */
 const ROBOTS_USER_AGENT = "SearchForge";
