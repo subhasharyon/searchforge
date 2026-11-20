@@ -1,8 +1,10 @@
 import {
   DOCUMENT_CATEGORIES,
   DOCUMENT_CONTENT_TYPES,
+  SEARCH_MODES,
   type DocumentCategory,
   type DocumentContentType,
+  type SearchMode,
 } from "@/types/search"
 
 export const DEFAULT_PAGE_SIZE = 10;
@@ -22,6 +24,8 @@ export interface SearchUrlParams {
   contentType?: DocumentContentType;
   page?: number;
   limit?: number;
+  /** Absent = keyword (default). Only "semantic" is materialized in URLs. */
+  mode?: SearchMode;
 }
 
 const first = (value: string | string[] | undefined): string =>
@@ -51,6 +55,7 @@ export function parseSearchParams(
   const technology = first(raw.technology);
   const page = intInRange(first(raw.page), 1, Number.MAX_SAFE_INTEGER);
   const limit = intInRange(first(raw.limit), 1, MAX_PAGE_SIZE);
+  const mode = first(raw.mode);
 
   return {
     ...(q ? { q } : {}),
@@ -64,6 +69,9 @@ export function parseSearchParams(
       : {}),
     ...(page && page > 1 ? { page } : {}),
     ...(limit ? { limit } : {}),
+    ...(SEARCH_MODES.includes(mode as SearchMode) && mode !== "keyword"
+      ? { mode: mode as SearchMode }
+      : {}),
   };
 }
 
@@ -77,6 +85,9 @@ export function buildSearchHref(params: SearchUrlParams): string {
   if (params.page && params.page > 1) search.set("page", String(params.page));
   if (params.limit && params.limit !== DEFAULT_PAGE_SIZE) {
     search.set("limit", String(params.limit));
+  }
+  if (params.mode && params.mode !== "keyword") {
+    search.set("mode", params.mode);
   }
   const qs = search.toString();
   return qs ? `/search?${qs}` : "/search";

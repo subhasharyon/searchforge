@@ -1,5 +1,63 @@
 # SearchForge — agent notes
 
+## Hybrid search (M7.2)
+
+`GET /api/v1/search?mode=hybrid` — **application-level** reciprocal rank
+fusion (native `retriever.rrf` is Enterprise-licensed; the cluster's
+Basic license returns 403 `security_exception` — verified 2026-11-20).
+
+- Flow (`hybridSearchDocuments` in `search.service.ts`):
+  `Promise.allSettled([BM25 window, embedQuery])` →
+  `Promise.all([kNN window, union count])` → `fuseRrf` → slice page.
+  `allSettled` is deliberate: it observes both outcomes so a slow embed
+  cannot surface as an unhandled rejection after a fast ES failure.
+- `fuseRrf`: score(d) = Σ `1/(rankConstant + rank)` over both ranked
+  lists, merged by `_id` (= Mongo `_id`), ties break on `_id`. BM25 hit
+  wins the merge so its `highlight` survives; `score` on results is the
+  fused RRF score (~0.01–0.03), not a BM25 score.
+- Window: **fixed** `HYBRID_WINDOW_SIZE` = 100 (cap `MAX_HYBRID_WINDOW` =
+  1000). Pages are slices of one stable fused ranking; a growing window
+  would reorder earlier pages. `page*limit > 100` → 400.
+- `total` = `min(unionCount, window)` where unionCount counts the
+  retrievable union (`multi_match(q)` OR `exists:content_vector`) — exact
+  within the window, an honest servable ceiling beyond it.
+- Failures: embed leg → 503 `HYBRID_UNAVAILABLE`; either ES leg → 503
+  `SEARCH_UNAVAILABLE`. `mode=hybrid` without `q` → 400.
+- Tunables via `SearchDeps.searchConfig`: `hybridWindow`, `rankConstant`
+  (default `HYBRID_RANK_CONSTANT` = 60).
+- Eval: `npm run evaluate -- --mode hybrid --delay 21000` (`--delay`
+  paces queries for Voyage free-tier ~3 RPM). Reports land in
+  `backend/reports/` (gitignored).
+
+## Semantic search (M7.1)
+
+`GET /api/v1/search?mode=keyword|semantic` — `keyword` (default) is the
+unchanged BM25 path; `semantic` embeds `q` via the configured provider and
+runs Elasticsearch `knn` on `content_vector` (dense_vector, cosine,
+int8_hnsw) with the same category/source/technology/contentType filters
+inside `knn.filter`.
+
+- Provider: `EMBEDDING_PROVIDER` env — `disabled` (default), `local`
+  (dev/test only, deterministic hashing — no real semantics),
+  `openai-compat` (OpenAI-compatible `/embeddings` API; needs
+  `EMBEDDING_API_URL`/`_API_KEY`/`_MODEL`/`_DIMS`). `EMBEDDING_DIMS` must
+  match the model output or index creation fails.
+- Embedding state lives on the Mongo document (`contentVector`,
+  `embeddingModel`, `embeddedContentHash`); unchanged content skips
+  re-embedding, content/model changes mark it stale. Embed failures never
+  block keyword indexing — the doc is indexed without a vector and retried
+  on next sync/reindex.
+- Rebuild vectors: `POST /api/v1/search/reindex` (admin) — report includes
+  `embedded`/`vectorsReused`/`embeddingFailed`. Re-running reconciles gaps.
+- kNN has no `from` offset: the backend requests `k = page*limit`
+  (max `MAX_SEMANTIC_K` = 1000) and slices the page server-side; `total`
+  comes from a `count` of vectorized docs matching the filters.
+- `mode=semantic` without `q` is rejected (400); unconfigured/unavailable
+  provider returns 503 `SEMANTIC_UNAVAILABLE` — no silent keyword fallback.
+- Provider content egress: query + document text leaves the system only
+  when `openai-compat` points at an external endpoint. `local` and
+  `disabled` never egress.
+
 ## Backend verification commands
 
 Run from `backend/`:

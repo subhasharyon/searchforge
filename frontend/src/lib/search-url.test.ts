@@ -45,6 +45,15 @@ describe("parseSearchParams", () => {
   it("takes the first value of repeated params", () => {
     expect(parseSearchParams({ q: ["a", "b"] }).q).toBe("a")
   })
+
+  it("parses non-default modes but treats keyword and junk as absent", () => {
+    expect(parseSearchParams({ q: "x", mode: "semantic" }).mode).toBe(
+      "semantic"
+    )
+    expect(parseSearchParams({ q: "x", mode: "hybrid" }).mode).toBe("hybrid")
+    expect(parseSearchParams({ q: "x", mode: "keyword" }).mode).toBeUndefined()
+    expect(parseSearchParams({ q: "x", mode: "junk" }).mode).toBeUndefined()
+  })
 })
 
 describe("buildSearchHref", () => {
@@ -65,6 +74,19 @@ describe("buildSearchHref", () => {
   it("omits defaults for a clean URL", () => {
     expect(buildSearchHref({ q: "x", page: 1, limit: 10 })).toBe("/search?q=x")
     expect(buildSearchHref({})).toBe("/search")
+  })
+
+  it("keeps non-default modes in the href and across pagination", () => {
+    expect(buildSearchHref({ q: "x", mode: "semantic" })).toBe(
+      "/search?q=x&mode=semantic"
+    )
+    expect(buildSearchHref({ q: "x", mode: "hybrid" })).toBe(
+      "/search?q=x&mode=hybrid"
+    )
+    expect(buildSearchHref({ q: "x", mode: "semantic", page: 3 })).toBe(
+      "/search?q=x&page=3&mode=semantic"
+    )
+    expect(buildSearchHref({ q: "x", mode: "keyword" })).toBe("/search?q=x")
   })
 
   it("round-trips through the parser", () => {

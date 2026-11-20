@@ -1,5 +1,10 @@
 import { AppError } from "../../../shared/errors/app-error.js";
-import { searchDocuments } from "../../search/services/search.service.js";
+import {
+  hybridSearchDocuments,
+  searchDocuments,
+  semanticSearchDocuments,
+} from "../../search/services/search.service.js";
+import type { SearchMode } from "../../search/validators/search.validators.js";
 import type { SearchDeps } from "../../search/types/search.types.js";
 import { EVALUATION_DATASET } from "../dataset/evaluation.dataset.js";
 import {
@@ -28,9 +33,22 @@ export const DEFAULT_K_VALUES = [1, 3, 5, 10] as const;
 export interface EvaluateOptions {
   kValues?: number[];
   deps?: SearchDeps;
+  /** Retrieval mode to evaluate; default "keyword". */
+  mode?: SearchMode;
+  /** Delay between queries in ms - needed for rate-limited embedding
+      providers (Voyage free tier is ~3 RPM -> 21000ms). */
+  queryDelayMs?: number;
   /** Experiment label/config recorded in the report. */
   experiment?: { name: string; config: Record<string, number> };
 }
+
+/** Mode-aware dispatch so one tracked runner can score all three modes. */
+const searchForMode = (mode: SearchMode) =>
+  mode === "semantic"
+    ? semanticSearchDocuments
+    : mode === "hybrid"
+      ? hybridSearchDocuments
+      : searchDocuments;
 
 /**
  * Evaluation runner: executes every dataset query through the REAL
@@ -60,14 +78,16 @@ export const evaluateDataset = async (
   const resolved = await resolveDatasetJudgments(dataset);
   const coverage = buildCoverage(resolved);
   const relevant = (j: ResolvedJudgment) => j.grade >= RELEVANT_THRESHOLD;
+  const mode = options.mode ?? "keyword";
+  const search = searchForMode(mode);
 
   const results: EvaluatedQueryResult[] = [];
   const failures: QueryFailure[] = [];
 
   for (const query of resolved) {
     try {
-      const response = await searchDocuments(
-        { q: query.text, page: 1, limit: Math.min(maxK, 50) },
+      const response = await search(
+        { q: query.text, page: 1, limit: Math.min(maxK, 50), mode },
         options.deps ?? {}
       );
       const retrievedIds = response.results.map((r) => r.id);
@@ -96,6 +116,9 @@ export const evaluateDataset = async (
         error: error instanceof Error ? error.message : String(error),
       });
     }
+    if (options.queryDelayMs) {
+      await new Promise((r) => setTimeout(r, options.queryDelayMs));
+    }
   }
 
   const byK: Record<number, KMetrics> = {};
@@ -112,6 +135,7 @@ export const evaluateDataset = async (
   return {
     datasetVersion: dataset.version,
     evaluatedAt: new Date().toISOString(),
+    mode,
     kValues,
     ...(options.experiment ? { experiment: options.experiment } : {}),
     totals: {

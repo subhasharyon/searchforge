@@ -2,6 +2,11 @@ import { logger } from "../../../config/logger.js";
 import type { DocumentDocument } from "../../documents/repositories/document.repository.js";
 import { SEARCH_INDEX_ALIAS } from "./index-manager.service.js";
 import { getSearchClient } from "./es-client.provider.js";
+import { getEmbeddingProvider } from "./embedding.service.js";
+import {
+  buildEmbeddingInput,
+  embeddingIsStale,
+} from "./embedding.provider.js";
 import type {
   SearchDeps,
   SearchDocument,
@@ -30,7 +35,63 @@ export const toSearchDocument = (
     : {}),
   createdAt: doc.createdAt.toISOString(),
   updatedAt: doc.updatedAt.toISOString(),
+  // Vector fields only travel when the Mongo copy is valid; a failed or
+  // stale embedding leaves them absent so the doc can never match kNN.
+  ...(doc.contentVector?.length
+    ? {
+        content_vector: doc.contentVector,
+        embeddingModel: doc.embeddingModel,
+        embeddedContentHash: doc.embeddedContentHash,
+      }
+    : {}),
 });
+
+/**
+ * Generates and persists a document embedding when the provider considers
+ * it stale. Returns true when a vector is present afterwards (fresh or
+ * reused). A provider failure NEVER throws here - the caller still indexes
+ * the plain document fields, and the stale hash in Mongo guarantees the
+ * next sync or reindex retries the embedding.
+ */
+export const ensureDocumentEmbedding = async (
+  doc: DocumentDocument,
+  deps: SearchDeps = {}
+): Promise<boolean> => {
+  const provider = deps.embeddingProvider !== undefined
+    ? deps.embeddingProvider
+    : getEmbeddingProvider();
+  if (!provider) {
+    return Boolean(doc.contentVector?.length);
+  }
+  if (!embeddingIsStale(doc, provider)) {
+    return true;
+  }
+  try {
+    const [vector] = await provider.embedDocuments([
+      buildEmbeddingInput(doc.title, doc.content),
+    ]);
+    doc.contentVector = vector;
+    doc.embeddingModel = provider.model;
+    doc.embeddedContentHash = doc.contentHash;
+    await doc.save();
+    return true;
+  } catch (error) {
+    logger.warn(
+      {
+        err: error instanceof Error ? error.message : error,
+        documentId: doc._id.toString(),
+      },
+      "embedding generation failed; indexing document without a vector"
+    );
+    // The stored vector was stale (that's why we tried to embed): drop it
+    // from Mongo so it can never reach the index as a false positive.
+    doc.contentVector = undefined;
+    doc.embeddingModel = undefined;
+    doc.embeddedContentHash = undefined;
+    await doc.save();
+    return false;
+  }
+};
 
 /** Upserts the document into the search index (index = create-or-replace). */
 export const indexDocument = async (
@@ -85,10 +146,12 @@ export const removeDocument = async (
 /* ------------------------------------------------------------------ */
 
 export const syncDocumentToIndex = async (
-  doc: DocumentDocument
+  doc: DocumentDocument,
+  deps: SearchDeps = {}
 ): Promise<void> => {
   try {
-    await indexDocument(doc);
+    await ensureDocumentEmbedding(doc, deps);
+    await indexDocument(doc, deps);
   } catch (error) {
     logger.error(
       {

@@ -21,6 +21,7 @@ import {
   EmptyResultsState,
   SearchErrorState,
 } from "./_components/search-states"
+import { SearchModeToggle } from "./_components/search-mode"
 
 export const metadata: Metadata = {
   title: "Search — SearchForge",
@@ -39,6 +40,9 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
     try {
       data = await searchDocuments({
         ...params,
+        // Semantic retrieval requires a query (enforced by the backend
+        // validator); without one, browse mode stays keyword BM25.
+        mode: query ? params.mode : undefined,
         limit: params.limit ?? DEFAULT_PAGE_SIZE,
       })
     } catch (error) {
@@ -91,7 +95,10 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
             />
           ) : data ? (
             <>
-              <ActiveFilters params={params} />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <ActiveFilters params={params} />
+                <SearchModeToggle params={params} />
+              </div>
               {data.results.length > 0 ? (
                 <>
                   <div className={filterCount > 0 ? "mt-4" : undefined}>

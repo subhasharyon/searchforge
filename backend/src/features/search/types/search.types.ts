@@ -2,6 +2,7 @@ import type {
   DocumentCategory,
   DocumentContentType,
 } from "../../documents/types/document.types.js";
+import type { EmbeddingProvider } from "../services/embedding.provider.js";
 
 /**
  * Flat JSON shape written to Elasticsearch. Deliberately mirrors the
@@ -22,6 +23,11 @@ export interface SearchDocument {
   publishedAt?: string; // ISO 8601
   createdAt: string;
   updatedAt: string;
+  // Optional semantic-search projection (M7.1). Present only when the
+  // document carries a valid, current embedding.
+  content_vector?: number[];
+  embeddingModel?: string;
+  embeddedContentHash?: string;
 }
 
 /** Single search hit as exposed to API clients - never raw ES internals. */
@@ -64,6 +70,12 @@ export interface ReindexReport {
   durationMs: number;
   /** First few bulk item failures, capped for readability. */
   errors: string[];
+  /** Documents freshly embedded during this rebuild. */
+  embedded: number;
+  /** Documents whose stored vector was still current and was reused. */
+  vectorsReused: number;
+  /** Documents indexed WITHOUT a vector because embedding failed. */
+  embeddingFailed: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -116,12 +128,17 @@ export interface EsClientLike {
     index: string;
     operations: (Record<string, unknown> | SearchDocument)[];
   }): Promise<EsBulkResponse>;
+  count(opts: {
+    index: string;
+    query?: Record<string, unknown>;
+  }): Promise<{ count: number }>;
   search(opts: {
     index: string;
-    from: number;
     size: number;
-    track_total_hits: boolean;
-    query: Record<string, unknown>;
+    track_total_hits?: boolean;
+    from?: number;
+    query?: Record<string, unknown>;
+    knn?: Record<string, unknown>;
     sort?: Record<string, unknown>[];
     highlight?: Record<string, unknown>;
     _source?: string[] | boolean;
@@ -137,10 +154,16 @@ export interface SearchRankingConfig {
   titleBoost: number;
   contentBoost: number;
   technologiesBoost: number;
+  /** Hybrid (M7.2): RRF rank constant; default HYBRID_RANK_CONSTANT. */
+  rankConstant?: number;
+  /** Hybrid: fused candidate window; default HYBRID_WINDOW_SIZE. */
+  hybridWindow?: number;
 }
 
 export interface SearchDeps {
   client?: EsClientLike;
   /** Ranking overrides; unset means production defaults. */
   searchConfig?: SearchRankingConfig;
+  /** Embedding provider override; unset resolves from configuration. */
+  embeddingProvider?: EmbeddingProvider | null;
 }

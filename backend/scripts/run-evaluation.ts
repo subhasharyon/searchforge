@@ -1,9 +1,13 @@
 /**
  * Runs the evaluation dataset against the live search implementation.
  *
- *   npm run evaluate                baseline only
- *   npm run evaluate -- --all       baseline + every experiment preset
- *   npm run evaluate -- --exp name  single preset
+ *   npm run evaluate                       baseline only (keyword)
+ *   npm run evaluate -- --all              baseline + every experiment preset
+ *   npm run evaluate -- --exp name         single preset
+ *   npm run evaluate -- --mode semantic    score semantic retrieval
+ *   npm run evaluate -- --mode hybrid      score hybrid RRF retrieval
+ *   npm run evaluate -- --mode hybrid --delay 21000   pace for free-tier
+ *                                     embedding rate limits (~3 RPM)
  *
  * Writes a JSON report to backend/reports/eval-<timestamp>.json.
  */
@@ -20,18 +24,37 @@ import {
   EXPERIMENT_PRESETS,
 } from "../src/features/evaluation/services/experiment.service.js";
 import type { EvaluationReport } from "../src/features/evaluation/types/evaluation.types.js";
+import type { SearchMode } from "../src/features/search/validators/search.validators.js";
 
 const args = process.argv.slice(2);
 const wantAll = args.includes("--all");
 const expIdx = args.indexOf("--exp");
 const singlePreset = expIdx !== -1 ? args[expIdx + 1] : undefined;
+const modeIdx = args.indexOf("--mode");
+const MODES: readonly SearchMode[] = ["keyword", "semantic", "hybrid"];
+const mode: SearchMode | undefined =
+  modeIdx !== -1 &&
+  MODES.includes(args[modeIdx + 1] as SearchMode)
+    ? (args[modeIdx + 1] as SearchMode)
+    : undefined;
+if (modeIdx !== -1 && !mode) {
+  console.error(`--mode must be one of ${MODES.join("|")}`);
+  process.exit(1);
+}
+const delayIdx = args.indexOf("--delay");
+const queryDelayMs =
+  delayIdx !== -1 && Number(args[delayIdx + 1]) > 0
+    ? Number(args[delayIdx + 1])
+    : undefined;
 
 const fmt = (v: number | null): string =>
   v === null ? "  n/a " : v.toFixed(4);
 
 const printReport = (report: EvaluationReport): void => {
   const cov = report.coverage;
-  console.log(`\n=== ${report.experiment?.name ?? "baseline"} ===`);
+  console.log(
+    `\n=== ${report.experiment?.name ?? `baseline-${report.mode ?? "keyword"}`} ===`
+  );
   console.log(
     `queries: ${report.totals.evaluated} evaluated, ` +
       `${report.totals.failed} failed | ` +
@@ -61,10 +84,12 @@ const printReport = (report: EvaluationReport): void => {
 const run = async (): Promise<void> => {
   await connectMongoDB();
 
-  const baseline = await evaluateDataset();
+  const baseline = await evaluateDataset(undefined, { mode, queryDelayMs });
   printReport(baseline);
 
-  const reports: Record<string, EvaluationReport> = { baseline };
+  const reports: Record<string, EvaluationReport> = {
+    [`baseline-${baseline.mode ?? "keyword"}`]: baseline,
+  };
 
   const presets = wantAll
     ? EXPERIMENT_PRESETS.filter((p) => p.name !== "baseline")
@@ -75,6 +100,8 @@ const run = async (): Promise<void> => {
   for (const preset of presets) {
     const report = await evaluateDataset(undefined, {
       deps: { searchConfig: preset.config },
+      mode,
+      queryDelayMs,
       experiment: { name: preset.name, config: { ...preset.config } },
     });
     printReport(report);

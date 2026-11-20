@@ -2,12 +2,18 @@ import { Types } from "mongoose";
 import { AppError } from "../../../shared/errors/app-error.js";
 import { logger } from "../../../config/logger.js";
 import { DocumentModel } from "../../documents/models/document.model.js";
+import type { DocumentDocument } from "../../documents/repositories/document.repository.js";
 import {
   createNextIndex,
   swapSearchAlias,
 } from "./index-manager.service.js";
 import { getSearchClient } from "./es-client.provider.js";
 import { toSearchDocument } from "./indexing.service.js";
+import { getEmbeddingProvider } from "./embedding.service.js";
+import {
+  buildEmbeddingInput,
+  embeddingIsStale,
+} from "./embedding.provider.js";
 import type {
   ReindexReport,
   SearchDeps,
@@ -15,6 +21,8 @@ import type {
 } from "../types/search.types.js";
 
 const REINDEX_BATCH_SIZE = 500;
+/** Provider-side input cap per embed call (Voyage's limit is 128). */
+const EMBED_BATCH_SIZE = 64;
 const MAX_REPORTED_ERRORS = 10;
 
 /**
@@ -71,6 +79,10 @@ const doRebuild = async (
   const { indexName, previousTargets } = await createNextIndex({ client });
   const fromIndex = previousTargets[0] ?? null;
 
+  const provider = deps.embeddingProvider !== undefined
+    ? deps.embeddingProvider
+    : getEmbeddingProvider();
+
   const report: ReindexReport = {
     fromIndex,
     toIndex: indexName,
@@ -79,25 +91,83 @@ const doRebuild = async (
     batches: 0,
     durationMs: 0,
     errors: [],
+    embedded: 0,
+    vectorsReused: 0,
+    embeddingFailed: 0,
+  };
+
+  /**
+   * Embeds the stale documents of a batch in provider-sized chunks.
+   * Embedding failure is NON-fatal by design: the affected documents are
+   * stripped of stale vector state and indexed without vectors, so the
+   * keyword rebuild always completes; a re-run reconciles the gaps.
+   */
+  const embedBatch = async (docs: DocumentDocument[]): Promise<void> => {
+    if (!provider || docs.length === 0) {
+      report.vectorsReused += docs.filter(
+        (d) => d.contentVector?.length
+      ).length;
+      return;
+    }
+    const stale = docs.filter((d) => embeddingIsStale(d, provider));
+    report.vectorsReused += docs.length - stale.length;
+    for (let i = 0; i < stale.length; i += EMBED_BATCH_SIZE) {
+      const slice = stale.slice(i, i + EMBED_BATCH_SIZE);
+      try {
+        const vectors = await provider.embedDocuments(
+          slice.map((d) => buildEmbeddingInput(d.title, d.content))
+        );
+        for (const [j, d] of slice.entries()) {
+          d.contentVector = vectors[j];
+          d.embeddingModel = provider.model;
+          d.embeddedContentHash = d.contentHash;
+        }
+        await DocumentModel.bulkSave(slice);
+        report.embedded += slice.length;
+      } catch (error) {
+        report.embeddingFailed += slice.length;
+        for (const d of slice) {
+          d.contentVector = undefined;
+          d.embeddingModel = undefined;
+          d.embeddedContentHash = undefined;
+        }
+        await Promise.all(slice.map((d) => d.save())).catch(() => undefined);
+        logger.warn(
+          {
+            err: error instanceof Error ? error.message : error,
+            documents: slice.length,
+          },
+          "embedding batch failed during reindex; docs indexed without vectors"
+        );
+      }
+    }
   };
 
   try {
     // Sort by _id so the scan is stable; the cursor streams documents.
     const cursor = DocumentModel.find().sort({ _id: 1 }).cursor();
 
-    let batch: (Record<string, unknown> | SearchDocument)[] = [];
+    let docBatch: DocumentDocument[] = [];
 
     const flush = async (): Promise<void> => {
-      if (batch.length === 0) {
+      if (docBatch.length === 0) {
         return;
+      }
+      await embedBatch(docBatch);
+      const operations: (Record<string, unknown> | SearchDocument)[] = [];
+      for (const doc of docBatch) {
+        operations.push(
+          { index: { _id: (doc._id as Types.ObjectId).toString() } },
+          toSearchDocument(doc)
+        );
       }
       const bulkResponse = await client.bulk({
         index: indexName,
-        operations: batch,
+        operations,
       });
       report.batches += 1;
       if (!bulkResponse.errors) {
-        report.indexed += batch.length / 2;
+        report.indexed += docBatch.length;
       } else {
         // Count every item in this batch accurately, then abort: a
         // partial index must never be promoted to active.
@@ -117,15 +187,12 @@ const doRebuild = async (
         );
       }
       onProgress?.(report.indexed + report.failed);
-      batch = [];
+      docBatch = [];
     };
 
     for await (const doc of cursor) {
-      batch.push(
-        { index: { _id: (doc._id as Types.ObjectId).toString() } },
-        toSearchDocument(doc)
-      );
-      if (batch.length >= REINDEX_BATCH_SIZE * 2) {
+      docBatch.push(doc);
+      if (docBatch.length >= REINDEX_BATCH_SIZE) {
         await flush();
       }
     }

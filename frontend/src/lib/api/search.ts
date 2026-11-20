@@ -1,5 +1,5 @@
 import { authorizedJson } from "@/lib/api/authorized";
-import type { SearchResponse } from "@/types/search";
+import type { SearchMode, SearchResponse } from "@/types/search";
 
 export interface SearchParams {
   q?: string;
@@ -9,6 +9,7 @@ export interface SearchParams {
   contentType?: string;
   page?: number;
   limit?: number;
+  mode?: SearchMode;
 }
 
 /**
@@ -24,6 +25,7 @@ export function buildSearchParams({
   contentType,
   page,
   limit,
+  mode,
 }: SearchParams): string {
   const params = new URLSearchParams();
   const trimmed = q?.trim();
@@ -46,6 +48,9 @@ export function buildSearchParams({
   }
   if (limit !== undefined) {
     params.set("limit", String(limit));
+  }
+  if (mode && mode !== "keyword") {
+    params.set("mode", mode);
   }
   return params.toString();
 }
