@@ -3,7 +3,10 @@ import {
   DOCUMENT_CATEGORIES,
   DOCUMENT_CONTENT_TYPES,
 } from "../../documents/types/document.types.js";
-import { MAX_RESULT_WINDOW } from "../services/search.service.js";
+import {
+  HYBRID_WINDOW_SIZE,
+  MAX_RESULT_WINDOW,
+} from "../services/search.service.js";
 
 export const MAX_PAGE_LIMIT = 50;
 
@@ -22,10 +25,24 @@ export const searchQuerySchema = z
     contentType: z.enum(DOCUMENT_CONTENT_TYPES).optional(),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(MAX_PAGE_LIMIT).default(20),
+    // Retrieval mode. Absent/keyword keeps the historical BM25 path;
+    // semantic/hybrid require a query string (vector leg has no "browse").
+    mode: z.enum(["keyword", "semantic", "hybrid"]).default("keyword"),
   })
   .refine(
     (value) => (value.page - 1) * value.limit + value.limit <= MAX_RESULT_WINDOW,
     "Requested page is beyond the searchable result window"
+  )
+  .refine(
+    (value) => value.mode === "keyword" || Boolean(value.q),
+    "mode=semantic and mode=hybrid require a query (q)"
+  )
+  .refine(
+    (value) =>
+      value.mode !== "hybrid" ||
+      value.page * value.limit <= HYBRID_WINDOW_SIZE,
+    "Requested page is beyond the hybrid fusion window"
   );
 
 export type SearchQuery = z.infer<typeof searchQuerySchema>;
+export type SearchMode = SearchQuery["mode"];

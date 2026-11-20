@@ -1,5 +1,3 @@
-import Link from "next/link"
-
 import { Logo } from "@/components/shared/logo"
 import { ThemeToggle } from "@/components/shared/theme-toggle"
 
@@ -14,12 +12,8 @@ export default function AuthLayout({
         <ThemeToggle />
       </div>
       <div className="flex flex-1 flex-col items-center justify-center px-4 py-16">
-        <Link
-          href="/"
-          className="rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-        >
-          <Logo />
-        </Link>
+        {/* Logo already renders a home link — don't wrap it in another. */}
+        <Logo />
         <div className="mt-8 w-full max-w-sm">{children}</div>
       </div>
     </main>

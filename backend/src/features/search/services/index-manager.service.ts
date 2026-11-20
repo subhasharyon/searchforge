@@ -1,5 +1,6 @@
 import { logger } from "../../../config/logger.js";
 import { getSearchClient } from "./es-client.provider.js";
+import { resolveVectorDims } from "./embedding.service.js";
 import type {
   EsClientLike,
   SearchDeps,
@@ -52,6 +53,42 @@ export const SEARCH_MAPPINGS: Record<string, unknown> = {
     createdAt: { type: "date" },
     updatedAt: { type: "date" },
   },
+};
+
+export const VECTOR_FIELD = "content_vector";
+
+/**
+ * Base mappings plus the semantic-search fields. The vector field exists
+ * only when `vectorDims` is supplied (i.e. a provider is configured) - its
+ * `dims` come from the provider contract, never a hard-coded default.
+ * `embeddingModel`/`embeddedContentHash` are recorded for staleness and
+ * reconciliation queries; the vector itself is never read back.
+ */
+export const buildSearchMappings = (
+  vectorDims?: number
+): Record<string, unknown> => {
+  if (vectorDims === undefined) {
+    return SEARCH_MAPPINGS;
+  }
+  return {
+    ...SEARCH_MAPPINGS,
+    properties: {
+      ...(SEARCH_MAPPINGS.properties as Record<string, unknown>),
+      [VECTOR_FIELD]: {
+        type: "dense_vector",
+        dims: vectorDims,
+        index: true,
+        similarity: "cosine",
+        index_options: {
+          type: "int8_hnsw",
+          m: 16,
+          ef_construction: 100,
+        },
+      },
+      embeddingModel: { type: "keyword" },
+      embeddedContentHash: { type: "keyword" },
+    },
+  };
 };
 
 export const SEARCH_SETTINGS: Record<string, unknown> = {
@@ -108,7 +145,7 @@ export const ensureSearchIndex = async (
     await indicesOf(client).create({
       index: initialIndex,
       settings: SEARCH_SETTINGS,
-      mappings: SEARCH_MAPPINGS,
+      mappings: buildSearchMappings(resolveVectorDims()),
     });
     logger.info({ index: initialIndex }, "created search index");
   }
@@ -132,7 +169,7 @@ export const createNextIndex = async (
   await indicesOf(client).create({
     index: indexName,
     settings: SEARCH_SETTINGS,
-    mappings: SEARCH_MAPPINGS,
+    mappings: buildSearchMappings(resolveVectorDims()),
   });
   return { indexName, previousTargets };
 };

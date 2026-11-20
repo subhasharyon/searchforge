@@ -13,6 +13,7 @@ import {
   removeDocument,
   toSearchDocument,
 } from "../src/features/search/services/indexing.service.js";
+import { embeddingDeps } from "../src/features/search/services/embedding.provider.js";
 import { rebuildSearchIndex } from "../src/features/search/services/reindex.service.js";
 import { searchDocuments } from "../src/features/search/services/search.service.js";
 import type {
@@ -111,6 +112,7 @@ const fakeClient = (
         .map(() => ({ index: { status: 200 } }));
       return { errors: false, items };
     },
+    count: async () => ({ count: 0 }),
     search: async (arg) => {
       calls.push({ method: "search", arg });
       return (
@@ -130,10 +132,19 @@ const lastCall = (
 
 beforeAll(startTestDb);
 afterAll(stopTestDb);
+// Pin the embedding provider off so a configured EMBEDDING_PROVIDER in a
+// local .env cannot leak real dims into mapping assertions.
+beforeAll(() => {
+  embeddingDeps.provider = null;
+});
+afterAll(() => {
+  delete embeddingDeps.provider;
+});
 
 const query = (overrides: Partial<SearchQuery> = {}): SearchQuery => ({
   page: 1,
   limit: 20,
+  mode: "keyword",
   ...overrides,
 });
 

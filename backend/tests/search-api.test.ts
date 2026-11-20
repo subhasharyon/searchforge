@@ -78,6 +78,7 @@ const client: EsClientLike = {
         .map(() => ({ index: { status: 200 } })),
     };
   },
+  count: async () => ({ count: 0 }),
   search: async () => searchHit,
 };
 

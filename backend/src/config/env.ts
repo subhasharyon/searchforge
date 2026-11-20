@@ -53,6 +53,22 @@ const envSchema = z.object({
       "TRUST_PROXY=true trusts arbitrary X-Forwarded-For and defeats rate limiting"
     ),
 
+  // Semantic-search embedding provider (M7.1).
+  // "disabled": no vector work anywhere; keyword search is unaffected and
+  // mode=semantic returns 503. "local": deterministic feature-hashing
+  // vectors for development/testing - NO real semantics. "openai-compat":
+  // any OpenAI-compatible POST {api}/embeddings endpoint (OpenAI, Voyage,
+  // self-hosted). When enabled, all of the provider settings are required
+  // except for "local", which needs only EMBEDDING_DIMS.
+  EMBEDDING_PROVIDER: z
+    .enum(["disabled", "local", "openai-compat"])
+    .default("disabled"),
+  EMBEDDING_API_URL: z.url().optional(),
+  EMBEDDING_API_KEY: z.string().optional(),
+  EMBEDDING_MODEL: z.string().optional(),
+  EMBEDDING_DIMS: z.coerce.number().int().positive().optional(),
+  EMBEDDING_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+
   // Max credential-endpoint requests per IP per 15 minutes (brute-force
   // protection). Raised in the test env so suites aren't self-limiting.
   AUTH_CREDENTIAL_RATE_LIMIT: z.coerce.number().int().positive().default(20),

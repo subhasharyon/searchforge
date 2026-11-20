@@ -39,6 +39,15 @@ export interface IDocument {
   sourceId?: string;
   author?: string;
   publishedAt?: Date;
+  /**
+   * Semantic-search state (M7.1): the vector currently projected into ES,
+   * the model that produced it, and the contentHash it was built from.
+   * Set only after a successful embedding; all three stay absent when the
+   * provider is disabled or embedding has never succeeded.
+   */
+  contentVector?: number[];
+  embeddingModel?: string;
+  embeddedContentHash?: string;
   createdAt: Date;
   updatedAt: Date;
 }

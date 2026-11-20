@@ -17,6 +17,9 @@ export default defineConfig({
       JWT_REFRESH_TOKEN_TTL: "7d",
       // Suite makes more credential requests than the production limit allows
       AUTH_CREDENTIAL_RATE_LIMIT: "1000",
+      // Never let a local .env leak a real embedding provider into tests -
+      // suites that need one inject embeddingDeps.provider explicitly.
+      EMBEDDING_PROVIDER: "disabled",
     },
   },
 });

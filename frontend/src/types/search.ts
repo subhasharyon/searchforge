@@ -22,6 +22,10 @@ export const DOCUMENT_CONTENT_TYPES = [
 ] as const;
 export type DocumentContentType = (typeof DOCUMENT_CONTENT_TYPES)[number];
 
+/** Retrieval modes supported by GET /api/v1/search (M7.1/M7.2). */
+export const SEARCH_MODES = ["keyword", "semantic", "hybrid"] as const;
+export type SearchMode = (typeof SEARCH_MODES)[number];
+
 /** Single search hit as exposed by the backend API. */
 export interface SearchResultItem {
   id: string;
