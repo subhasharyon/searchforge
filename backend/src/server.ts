@@ -3,7 +3,10 @@ import { env } from "./config/env.js";
 import { connectMongoDB } from "./config/database.js";
 import { connectElasticsearch, elasticsearchClient } from "./config/elasticsearch.js";
 import { connectRedis, redisClient } from "./config/redis.js";
-import { ensureSearchIndex } from "./features/search/services/index-manager.service.js";
+import {
+  ensureChunkIndex,
+  ensureSearchIndex,
+} from "./features/search/services/index-manager.service.js";
 import { logger } from "./config/logger.js";
 import mongoose from "mongoose";
 import app from "./app.js";
@@ -16,6 +19,7 @@ const startServer = async (): Promise<void> => {
     await connectMongoDB();
     await connectElasticsearch();
     await ensureSearchIndex();
+    await ensureChunkIndex();
     await connectRedis();
 
     server = app.listen(env.PORT, () => {

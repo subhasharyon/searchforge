@@ -282,6 +282,7 @@ const clientReturning = (idsByQuery: Record<string, string[]>): EsClientLike => 
   },
   index: async () => ({}),
   delete: async () => ({}),
+  deleteByQuery: async () => ({ deleted: 0 }),
   bulk: async () => ({ errors: false, items: [] }),
   count: async () => ({ count: 0 }),
   search: async (opts) => {

@@ -105,6 +105,7 @@ const fakeClient = (
       calls.push({ method: "delete", arg });
       return {};
     },
+    deleteByQuery: async () => ({ deleted: 0 }),
     bulk: async (arg) => {
       calls.push({ method: "bulk", arg });
       const items = arg.operations

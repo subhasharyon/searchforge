@@ -7,6 +7,7 @@ import {
   HYBRID_WINDOW_SIZE,
   MAX_RESULT_WINDOW,
 } from "../services/search.service.js";
+import { PASSAGE_WINDOW_SIZE } from "../services/chunk-search.service.js";
 
 export const MAX_PAGE_LIMIT = 50;
 
@@ -27,7 +28,7 @@ export const searchQuerySchema = z
     limit: z.coerce.number().int().min(1).max(MAX_PAGE_LIMIT).default(20),
     // Retrieval mode. Absent/keyword keeps the historical BM25 path;
     // semantic/hybrid require a query string (vector leg has no "browse").
-    mode: z.enum(["keyword", "semantic", "hybrid"]).default("keyword"),
+    mode: z.enum(["keyword", "semantic", "hybrid", "passage"]).default("keyword"),
   })
   .refine(
     (value) => (value.page - 1) * value.limit + value.limit <= MAX_RESULT_WINDOW,
@@ -35,13 +36,19 @@ export const searchQuerySchema = z
   )
   .refine(
     (value) => value.mode === "keyword" || Boolean(value.q),
-    "mode=semantic and mode=hybrid require a query (q)"
+    "mode=semantic, mode=hybrid and mode=passage require a query (q)"
   )
   .refine(
     (value) =>
       value.mode !== "hybrid" ||
       value.page * value.limit <= HYBRID_WINDOW_SIZE,
     "Requested page is beyond the hybrid fusion window"
+  )
+  .refine(
+    (value) =>
+      value.mode !== "passage" ||
+      value.page * value.limit <= PASSAGE_WINDOW_SIZE,
+    "Requested page is beyond the passage fusion window"
   );
 
 export type SearchQuery = z.infer<typeof searchQuerySchema>;

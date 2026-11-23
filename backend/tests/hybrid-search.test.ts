@@ -62,6 +62,7 @@ const fakeHybridClient = (
     },
     index: async () => ({}),
     delete: async () => ({}),
+    deleteByQuery: async () => ({ deleted: 0 }),
     bulk: async () => ({ errors: false, items: [] }),
     count: async () => ({ count: opts.countValue ?? 0 }),
     search: async (a) => {

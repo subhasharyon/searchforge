@@ -4,6 +4,7 @@ import {
   searchDocuments,
   semanticSearchDocuments,
 } from "../services/search.service.js";
+import { passageSearchDocuments } from "../services/chunk-search.service.js";
 import { rebuildSearchIndex } from "../services/reindex.service.js";
 import type { SearchQuery } from "../validators/search.validators.js";
 
@@ -15,7 +16,9 @@ export const searchController = async (req: Request, res: Response) => {
       ? await semanticSearchDocuments(query)
       : query.mode === "hybrid"
         ? await hybridSearchDocuments(query)
-        : await searchDocuments(query);
+        : query.mode === "passage"
+          ? await passageSearchDocuments(query)
+          : await searchDocuments(query);
 
   res.status(200).json({ success: true, data: response });
 };

@@ -61,6 +61,32 @@ export interface SearchResponse {
   pagination: SearchPagination;
 }
 
+/** Single chunk hit (M7.3 passage search) - one passage plus its parent
+    document identity. */
+export interface PassageResultItem {
+  /** Chunk ES _id: `{documentId}:{chunk_index}`. */
+  id: string;
+  documentId: string;
+  title: string;
+  url: string;
+  source: string;
+  category: DocumentCategory;
+  contentType: DocumentContentType;
+  technologies: string[];
+  heading: string;
+  excerpt: string;
+  score: number;
+  highlights: {
+    content: string[];
+    heading: string[];
+  };
+}
+
+export interface PassageSearchResponse {
+  results: PassageResultItem[];
+  pagination: SearchPagination;
+}
+
 export interface ReindexReport {
   fromIndex: string | null;
   toIndex: string;
@@ -124,6 +150,10 @@ export interface EsClientLike {
     document: SearchDocument;
   }): Promise<unknown>;
   delete(opts: { index: string; id: string }): Promise<unknown>;
+  deleteByQuery(opts: {
+    index: string;
+    query?: Record<string, unknown>;
+  }): Promise<{ deleted?: number }>;
   bulk(opts: {
     index: string;
     operations: (Record<string, unknown> | SearchDocument)[];
@@ -158,6 +188,10 @@ export interface SearchRankingConfig {
   rankConstant?: number;
   /** Hybrid: fused candidate window; default HYBRID_WINDOW_SIZE. */
   hybridWindow?: number;
+  /** Passage (M7.3): fused candidate window; default PASSAGE_WINDOW_SIZE. */
+  passageWindow?: number;
+  /** Passage: max chunks per parent document; default PASSAGE_MAX_PER_DOC. */
+  passageMaxPerDoc?: number;
 }
 
 export interface SearchDeps {
@@ -166,4 +200,7 @@ export interface SearchDeps {
   searchConfig?: SearchRankingConfig;
   /** Embedding provider override; unset resolves from configuration. */
   embeddingProvider?: EmbeddingProvider | null;
+  /** Optional delay between chunk embed batches (free-tier pacing for
+      bulk scripts; 0 in the live path). */
+  embedBatchDelayMs?: number;
 }

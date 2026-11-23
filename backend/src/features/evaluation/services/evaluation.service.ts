@@ -4,6 +4,7 @@ import {
   searchDocuments,
   semanticSearchDocuments,
 } from "../../search/services/search.service.js";
+import { passageSearchDocuments } from "../../search/services/chunk-search.service.js";
 import type { SearchMode } from "../../search/validators/search.validators.js";
 import type { SearchDeps } from "../../search/types/search.types.js";
 import { EVALUATION_DATASET } from "../dataset/evaluation.dataset.js";
@@ -42,13 +43,23 @@ export interface EvaluateOptions {
   experiment?: { name: string; config: Record<string, number> };
 }
 
-/** Mode-aware dispatch so one tracked runner can score all three modes. */
+/** Mode-aware dispatch so one tracked runner can score every mode. Passage
+    hits are mapped to their parent document id - judgments are doc-level,
+    so passage retrieval is scored by the documents it surfaces. */
 const searchForMode = (mode: SearchMode) =>
   mode === "semantic"
     ? semanticSearchDocuments
     : mode === "hybrid"
       ? hybridSearchDocuments
-      : searchDocuments;
+      : mode === "passage"
+        ? async (query: Parameters<typeof passageSearchDocuments>[0], deps?: Parameters<typeof passageSearchDocuments>[1]) => {
+            const response = await passageSearchDocuments(query, deps);
+            return {
+              results: response.results.map((p) => ({ id: p.documentId })),
+              pagination: response.pagination,
+            };
+          }
+        : searchDocuments;
 
 /**
  * Evaluation runner: executes every dataset query through the REAL

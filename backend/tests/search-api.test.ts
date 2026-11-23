@@ -69,6 +69,7 @@ const client: EsClientLike = {
     deletedIds.push(o.id);
     return {};
   },
+  deleteByQuery: async () => ({ deleted: 0 }),
   bulk: async (o) => {
     bulkCalls.push(o);
     return {
@@ -335,8 +336,12 @@ describe("POST /api/v1/search/reindex", () => {
     expect(report.failed).toBe(0);
     expect(report.toIndex).toBe("searchforge-documents-v1");
     // Both documents went through bulk into the new concrete index.
-    expect(bulkCalls).toHaveLength(1);
-    expect(bulkCalls[0]!.index).toBe("searchforge-documents-v1");
+    // (Per-ingest chunk syncs also record bulk calls into the chunk
+    // index - filter to the document index for this assertion.)
+    const docBulkCalls = bulkCalls.filter(
+      (c) => c.index === "searchforge-documents-v1"
+    );
+    expect(docBulkCalls).toHaveLength(1);
     // Alias swapped to the rebuilt index.
     expect(aliasActions).toContainEqual({
       add: { index: "searchforge-documents-v1", alias: SEARCH_INDEX_ALIAS },

@@ -1,12 +1,20 @@
 import { logger } from "../../../config/logger.js";
 import type { DocumentDocument } from "../../documents/repositories/document.repository.js";
-import { SEARCH_INDEX_ALIAS } from "./index-manager.service.js";
+import {
+  CHUNK_INDEX_ALIAS,
+  SEARCH_INDEX_ALIAS,
+} from "./index-manager.service.js";
 import { getSearchClient } from "./es-client.provider.js";
 import { getEmbeddingProvider } from "./embedding.service.js";
 import {
   buildEmbeddingInput,
   embeddingIsStale,
 } from "./embedding.provider.js";
+import {
+  chunkDocument,
+  chunkInputHash,
+  type DocumentChunk,
+} from "./chunking.service.js";
 import type {
   SearchDeps,
   SearchDocument,
@@ -145,6 +153,178 @@ export const removeDocument = async (
 /* the document id so they can be traced and repaired.                 */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* Chunk projection (M7.3)                                             */
+/*                                                                     */
+/* Chunks are derived data in a separate index family. On every doc   */
+/* sync the chunk set is replaced wholesale (delete-by-query then      */
+/* bulk) - chunk _ids are deterministic (`{docId}:{index}`), so the    */
+/* replacement is idempotent and drift-free. A chunk-sync failure is   */
+/* isolated from the document sync: the document stays searchable,    */
+/* and the next sync or reindex rebuilds the chunks.                  */
+/* ------------------------------------------------------------------ */
+
+/** Embedding input for a chunk: document title (repeated, matching the
+    document-level convention) plus the section heading as context. */
+const chunkEmbeddingInput = (
+  title: string,
+  chunk: DocumentChunk
+): string =>
+  buildEmbeddingInput(
+    title,
+    chunk.heading ? `${chunk.heading}\n\n${chunk.content}` : chunk.content
+  );
+
+const toChunkDocument = (
+  doc: DocumentDocument,
+  chunk: DocumentChunk,
+  vector?: number[],
+  model?: string,
+  inputHash?: string
+): Record<string, unknown> => ({
+  parent_document_id: doc._id.toString(),
+  chunk_index: chunk.index,
+  title: doc.title,
+  heading: chunk.heading,
+  content: chunk.content,
+  url: doc.url,
+  source: doc.source,
+  category: doc.category,
+  contentType: doc.contentType,
+  technologies: doc.technologies,
+  updatedAt: doc.updatedAt.toISOString(),
+  ...(vector?.length
+    ? {
+        content_vector: vector,
+        embeddingModel: model,
+        embeddedContentHash: inputHash,
+      }
+    : {}),
+});
+
+const isIndexMissing = (error: unknown): boolean =>
+  typeof error === "object" &&
+  error !== null &&
+  JSON.stringify(error).includes("index_not_found_exception");
+
+/** Chunks per embedding call: keeps token volume under provider
+    token-per-minute limits and bounds partial-failure blast radius. */
+export const CHUNK_EMBED_BATCH_SIZE = 16;
+
+/**
+ * Rebuilds the chunk projection for one document. Chunks embed in
+ * bounded batches; a failed batch indexes those chunks WITHOUT vectors
+ * (BM25 passage retrieval still works) and never throws.
+ * `deps.embedBatchDelayMs` paces batches for free-tier bulk scripts.
+ */
+export const syncChunksToIndex = async (
+  doc: DocumentDocument,
+  deps: SearchDeps = {}
+): Promise<void> => {
+  const client = deps.client ?? (await getSearchClient());
+  const parentId = doc._id.toString();
+
+  const chunks = chunkDocument(doc.content);
+  if (chunks.length === 0) {
+    return;
+  }
+
+  const provider =
+    deps.embeddingProvider !== undefined
+      ? deps.embeddingProvider
+      : getEmbeddingProvider();
+  const inputs = chunks.map((chunk) =>
+    chunkEmbeddingInput(doc.title, chunk)
+  );
+  /* Embed in bounded batches: a single call carrying a large document's
+     whole chunk set trips provider token-per-minute limits, and batching
+     also makes failures partial - good batches keep their vectors. */
+  const vectors: (number[] | undefined)[] = Array.from({
+    length: chunks.length,
+  });
+  if (provider) {
+    const delay = deps.embedBatchDelayMs ?? 0;
+    for (let i = 0; i < chunks.length; i += CHUNK_EMBED_BATCH_SIZE) {
+      if (i > 0 && delay > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+      const sliceInputs = inputs.slice(i, i + CHUNK_EMBED_BATCH_SIZE);
+      try {
+        const slice = await provider.embedDocuments(sliceInputs);
+        for (const [j, v] of slice.entries()) {
+          vectors[i + j] = v;
+        }
+      } catch (error) {
+        logger.warn(
+          {
+            err: error instanceof Error ? error.message : error,
+            documentId: parentId,
+            batch: Math.floor(i / CHUNK_EMBED_BATCH_SIZE),
+          },
+          "chunk embed batch failed; those chunks index without vectors"
+        );
+      }
+    }
+  }
+
+  try {
+    await client.deleteByQuery({
+      index: CHUNK_INDEX_ALIAS,
+      query: { term: { parent_document_id: parentId } },
+    });
+    const operations: Record<string, unknown>[] = chunks.flatMap(
+      (chunk, i) => [
+        { index: { _id: `${parentId}:${chunk.index}` } },
+        toChunkDocument(
+          doc,
+          chunk,
+          vectors[i],
+          provider?.model,
+          vectors[i] ? chunkInputHash(inputs[i] ?? "") : undefined
+        ),
+      ]
+    );
+    const result = await client.bulk({
+      index: CHUNK_INDEX_ALIAS,
+      operations,
+    });
+    if (result.errors) {
+      logger.warn(
+        { documentId: parentId },
+        "chunk bulk index reported item failures"
+      );
+    }
+  } catch (error) {
+    if (isIndexMissing(error)) {
+      logger.warn(
+        { documentId: parentId },
+        "chunk index missing; run ensureChunkIndex"
+      );
+      return;
+    }
+    throw error;
+  }
+};
+
+/** Removes all chunks of a document. Idempotent: an empty match set or a
+    missing chunk index is not an error. */
+export const removeChunksFromIndex = async (
+  documentId: string,
+  deps: SearchDeps = {}
+): Promise<void> => {
+  const client = deps.client ?? (await getSearchClient());
+  try {
+    await client.deleteByQuery({
+      index: CHUNK_INDEX_ALIAS,
+      query: { term: { parent_document_id: documentId } },
+    });
+  } catch (error) {
+    if (!isIndexMissing(error)) {
+      throw error;
+    }
+  }
+};
+
 export const syncDocumentToIndex = async (
   doc: DocumentDocument,
   deps: SearchDeps = {}
@@ -160,14 +340,29 @@ export const syncDocumentToIndex = async (
       },
       "Elasticsearch indexing failed; MongoDB document remains canonical"
     );
+    return;
+  }
+  // Chunk projection is isolated: a chunk-sync failure never fails the
+  // document write and is repairable by the next sync or a reindex.
+  try {
+    await syncChunksToIndex(doc, deps);
+  } catch (error) {
+    logger.error(
+      {
+        err: error instanceof Error ? error.message : error,
+        documentId: doc._id.toString(),
+      },
+      "Elasticsearch chunk indexing failed; chunks are rebuildable"
+    );
   }
 };
 
 export const removeDocumentFromIndex = async (
-  documentId: string
+  documentId: string,
+  deps: SearchDeps = {}
 ): Promise<void> => {
   try {
-    await removeDocument(documentId);
+    await removeDocument(documentId, deps);
   } catch (error) {
     logger.error(
       {
@@ -175,6 +370,17 @@ export const removeDocumentFromIndex = async (
         documentId,
       },
       "Elasticsearch delete failed; run a reindex to reconcile"
+    );
+  }
+  try {
+    await removeChunksFromIndex(documentId, deps);
+  } catch (error) {
+    logger.error(
+      {
+        err: error instanceof Error ? error.message : error,
+        documentId,
+      },
+      "Elasticsearch chunk delete failed; run a reindex to reconcile"
     );
   }
 };

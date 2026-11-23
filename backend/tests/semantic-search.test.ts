@@ -92,6 +92,7 @@ const fakeClient = (
       return {};
     },
     delete: async () => ({}),
+    deleteByQuery: async () => ({ deleted: 0 }),
     bulk: async (a) => {
       calls.push({ method: "bulk", arg: a });
       if (opts.bulkErrors) {
@@ -315,7 +316,9 @@ describe("syncDocumentToIndex embedding behaviour", () => {
     const { client, calls } = fakeClient();
     const doc = await makeDoc();
     await syncDocumentToIndex(doc, { client, embeddingProvider: provider });
-    expect(provider.embedDocuments).toHaveBeenCalledTimes(1);
+    // Two embedDocuments calls: one for the document vector, one batched
+    // call for the chunk projection (M7.3).
+    expect(provider.embedDocuments).toHaveBeenCalledTimes(2);
     const indexed = calls.find((c) => c.method === "index")!.arg as {
       document: { content_vector?: number[]; embeddingModel?: string };
     };
@@ -350,7 +353,10 @@ describe("syncDocumentToIndex embedding behaviour", () => {
       embeddedContentHash: "a".repeat(64),
     });
     await syncDocumentToIndex(doc, { client, embeddingProvider: provider });
-    expect(provider.embedDocuments).not.toHaveBeenCalled();
+    // The document vector is fresh so ensureDocumentEmbedding skips it;
+    // the single call is the chunk projection's batch (M7.3 rebuilds
+    // chunks on every sync).
+    expect(provider.embedDocuments).toHaveBeenCalledTimes(1);
   });
 
   it("re-embeds when content changed", async () => {
@@ -362,7 +368,8 @@ describe("syncDocumentToIndex embedding behaviour", () => {
       embeddedContentHash: "b".repeat(64), // differs from contentHash
     });
     await syncDocumentToIndex(doc, { client, embeddingProvider: provider });
-    expect(provider.embedDocuments).toHaveBeenCalledTimes(1);
+    // Doc re-embed + chunk projection batch.
+    expect(provider.embedDocuments).toHaveBeenCalledTimes(2);
   });
 
   it("clears a stale vector from Mongo when re-embedding fails", async () => {

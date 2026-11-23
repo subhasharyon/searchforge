@@ -44,7 +44,7 @@ export const DEFAULT_SEARCH_RANKING: SearchRankingConfig = {
  * Metadata filters in filter context — shared between BM25 `bool.filter`
  * and semantic `knn.filter` so both modes constrain identically.
  */
-const buildFilterClauses = (
+export const buildFilterClauses = (
   query: SearchQuery
 ): Record<string, unknown>[] => {
   const filter: Record<string, unknown>[] = [];
@@ -210,8 +210,8 @@ export const searchDocuments = async (
 /* ------------------------------------------------------------------ */
 
 export const MAX_SEMANTIC_K = 1_000;
-const NUM_CANDIDATES_FACTOR = 10;
-const NUM_CANDIDATES_MAX = 10_000;
+export const NUM_CANDIDATES_FACTOR = 10;
+export const NUM_CANDIDATES_MAX = 10_000;
 
 export const semanticSearchDocuments = async (
   query: SearchQuery,

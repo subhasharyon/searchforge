@@ -30,6 +30,7 @@ const noopClient: EsClientLike = {
   },
   index: async () => ({}),
   delete: async () => ({}),
+  deleteByQuery: async () => ({ deleted: 0 }),
   bulk: async () => ({ errors: false, items: [] }),
   count: async () => ({ count: 0 }),
   search: async (): Promise<EsSearchResponse> => ({
@@ -51,6 +52,8 @@ const adaptClient = (client: Client): EsClientLike => ({
   },
   index: async (opts) => client.index(opts),
   delete: async (opts) => client.delete(opts),
+  deleteByQuery: async (opts) =>
+    client.deleteByQuery(opts) as unknown as Promise<{ deleted?: number }>,
   bulk: async (opts) =>
     client.bulk(opts) as unknown as Promise<EsBulkResponse>,
   count: async (opts) =>
