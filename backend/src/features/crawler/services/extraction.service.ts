@@ -39,8 +39,15 @@ const BOILERPLATE_SELECTORS = [
   '[id*="cookie"]',
   '[class*="cookie-banner"]',
   '[class*="breadcrumb"]',
-  '[class*="sidebar"]',
-  '[id*="sidebar"]',
+  // Sidebar selectors are deliberately token/tag-aware: a bare substring
+  // match like `[class*="sidebar"]` removes layout wrappers whose classes
+  // merely mention sidebars ("with-sidebar", "grid-cols-sidebar-content")
+  // and destroys the content inside them. Verified against
+  // docs.docker.com + react.dev markup (M7.5 fix).
+  'aside[class*="sidebar"], nav[class*="sidebar"], details[class*="sidebar"]',
+  '[class~="sidebar"], [id="sidebar"]',
+  '[class^="sidebar-"], [class*=" sidebar-"]',
+  '[id^="sidebar-"], [id*=" sidebar-"]',
   '[class*="newsletter"]',
   '[class*="pagination"]',
 ].join(", ");
@@ -96,10 +103,16 @@ export const extractContent = (
     }
   }
 
-  $(BOILERPLATE_SELECTORS).remove();
-
   // First main-like container in document order; falls back to <body>.
+  // Resolved BEFORE stripping: a boilerplate selector must never remove
+  // an ancestor of the content we want, so those elements are skipped.
   const root = $(MAIN_SELECTOR).first();
+  const contentAncestors = new Set<unknown>(root.parents().toArray());
+  $(BOILERPLATE_SELECTORS).each((_, el) => {
+    if (!contentAncestors.has(el)) {
+      $(el).remove();
+    }
+  });
   const fragment = (root.length > 0 ? root : $("body")).html();
   const content = turndown.turndown(fragment ?? "");
   if (content.trim().length === 0) {

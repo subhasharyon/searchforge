@@ -14,7 +14,10 @@ export const CRAWLER_USER_AGENT =
   "SearchForge/1.0 (+https://github.com/subhasharyon/searchforge)";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
-const DEFAULT_MAX_BYTES = 1_000_000;
+// Reference documentation pages legitimately run large (node's fs.html
+// is ~1.4MB decompressed, redis.io ~7.4MB); 8MB keeps a hard memory bound
+// while admitting full-size API references.
+const DEFAULT_MAX_BYTES = 8_000_000;
 const DEFAULT_MAX_REDIRECTS = 3;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
