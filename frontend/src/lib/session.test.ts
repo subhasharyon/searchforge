@@ -14,6 +14,7 @@ describe("sanitizeNextPath", () => {
     expect(sanitizeNextPath("/documents/abc?from=%2Fsearch")).toBe(
       "/documents/abc?from=%2Fsearch"
     )
+    expect(sanitizeNextPath("/ask")).toBe("/ask")
   })
 
   it("rejects external origins and non-app paths", () => {

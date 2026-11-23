@@ -21,7 +21,7 @@ import { getSessionAccessToken } from "@/lib/session"
  */
 export async function authorizedJson<T>(
   path: string,
-  { retry = true }: { retry?: boolean } = {}
+  { retry = true, init = {} }: { retry?: boolean; init?: RequestInit } = {}
 ): Promise<T> {
   const token = await getSessionAccessToken({ forceRefresh: !retry })
   if (!token) {
@@ -29,14 +29,15 @@ export async function authorizedJson<T>(
   }
 
   const res = await rawFetch(path, {
-    headers: { Authorization: `Bearer ${token}` },
+    ...init,
+    headers: { Authorization: `Bearer ${token}`, ...init.headers },
   });
 
   if (res.status === 401) {
     if (!retry) {
       throw new ApiError("auth", "Session expired", { status: 401 });
     }
-    return authorizedJson<T>(path, { retry: false });
+    return authorizedJson<T>(path, { retry: false, init });
   }
 
   return parseEnvelope<T>(res, path);

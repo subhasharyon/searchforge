@@ -22,6 +22,15 @@ export async function SiteHeader() {
           >
             Search
           </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            nativeButton={false}
+            render={<Link href="/ask" />}
+            className="text-muted-foreground"
+          >
+            Ask
+          </Button>
           {session ? (
             <>
               <span className="hidden max-w-40 truncate px-1 text-sm text-muted-foreground sm:inline">
