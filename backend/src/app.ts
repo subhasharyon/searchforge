@@ -11,6 +11,7 @@ import documentRoutes from "./features/documents/routes/document.routes.js";
 import crawlerRoutes from "./features/crawler/routes/crawler.routes.js";
 import searchRoutes from "./features/search/routes/search.routes.js";
 import evaluationRoutes from "./features/evaluation/routes/evaluation.routes.js";
+import askRoutes from "./features/ask/routes/ask.routes.js";
 import {
   errorHandler,
   notFoundHandler,
@@ -63,6 +64,7 @@ app.use("/api/v1/documents", documentRoutes);
 app.use("/api/v1/crawler", crawlerRoutes);
 app.use("/api/v1/search", searchRoutes);
 app.use("/api/v1/evaluation", evaluationRoutes);
+app.use("/api/v1/ask", askRoutes);
 
 app.get("/", (_req, res) => {
   res.status(200).json({

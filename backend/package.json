@@ -13,6 +13,7 @@
     "test:watch": "vitest",
     "setup:es": "tsx scripts/setup-es-app-user.ts",
     "seed:eval": "tsx scripts/seed-eval-corpus.ts",
+    "seed:corpus": "tsx scripts/seed-corpus.ts",
     "evaluate": "tsx scripts/run-evaluation.ts"
   },
   "engines": {
@@ -22,6 +23,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@anthropic-ai/sdk": "1.8.0",
     "@elastic/elasticsearch": "^9.5.1",
     "bcrypt": "^6.0.0",
     "cheerio": "^1.2.0",

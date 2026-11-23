@@ -69,6 +69,23 @@ const envSchema = z.object({
   EMBEDDING_DIMS: z.coerce.number().int().positive().optional(),
   EMBEDDING_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 
+  // RAG answer-generation provider (M7.4).
+  // "disabled": POST /api/v1/ask returns 503 LLM_UNAVAILABLE. "anthropic":
+  // Anthropic Messages API via @anthropic-ai/sdk; "gemini": Google AI
+  // Studio generateContent REST API (free developer tier). Enabled
+  // providers require LLM_API_KEY and LLM_MODEL; LLM_API_URL overrides
+  // the Gemini base URL only.
+  LLM_PROVIDER: z.enum(["disabled", "anthropic", "gemini"]).default("disabled"),
+  LLM_API_KEY: z.string().optional(),
+  LLM_API_URL: z.url().optional(),
+  LLM_MODEL: z.string().optional(),
+  LLM_MAX_TOKENS: z.coerce.number().int().positive().default(1_024),
+  LLM_TIMEOUT_MS: z.coerce.number().int().positive().default(30_000),
+
+  // Max /api/v1/ask requests per IP per 15 minutes - the endpoint calls a
+  // paid LLM API, so it is throttled like the credential endpoints.
+  ASK_RATE_LIMIT: z.coerce.number().int().positive().default(30),
+
   // Max credential-endpoint requests per IP per 15 minutes (brute-force
   // protection). Raised in the test env so suites aren't self-limiting.
   AUTH_CREDENTIAL_RATE_LIMIT: z.coerce.number().int().positive().default(20),
