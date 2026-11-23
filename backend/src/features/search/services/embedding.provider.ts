@@ -1,5 +1,5 @@
 /**
- * Embedding provider abstraction (M7.1).
+ * Embedding provider abstraction.
  *
  * One embedding per document, built from `buildEmbeddingInput` below.
  * Providers are created via the `embeddingDeps` seam (tests) or lazily

@@ -86,7 +86,7 @@ export interface CoverageReport {
 export interface EvaluationReport {
   datasetVersion: string;
   evaluatedAt: string;
-  /** Retrieval mode the report was produced with (M7.2). */
+  /** Retrieval mode the report was produced with. */
   mode?: "keyword" | "semantic" | "hybrid" | "passage";
   kValues: number[];
   experiment?: { name: string; config: Record<string, number> };

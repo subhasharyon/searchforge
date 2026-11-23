@@ -97,7 +97,7 @@ export const SEARCH_SETTINGS: Record<string, unknown> = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Chunk index (M7.3): passage-level retrieval.                        */
+/* Chunk index: passage-level retrieval.                                */
 /*                                                                     */
 /* Chunks are derived data - MongoDB stays canonical for documents    */
 /* and the chunk index is a fully rebuildable projection, managed by   */

@@ -23,7 +23,7 @@ export interface SearchDocument {
   publishedAt?: string; // ISO 8601
   createdAt: string;
   updatedAt: string;
-  // Optional semantic-search projection (M7.1). Present only when the
+  // Optional semantic-search projection. Present only when the
   // document carries a valid, current embedding.
   content_vector?: number[];
   embeddingModel?: string;
@@ -61,7 +61,7 @@ export interface SearchResponse {
   pagination: SearchPagination;
 }
 
-/** Single chunk hit (M7.3 passage search) - one passage plus its parent
+/** Single chunk hit - one passage plus its parent
     document identity. */
 export interface PassageResultItem {
   /** Chunk ES _id: `{documentId}:{chunk_index}`. */
@@ -184,11 +184,11 @@ export interface SearchRankingConfig {
   titleBoost: number;
   contentBoost: number;
   technologiesBoost: number;
-  /** Hybrid (M7.2): RRF rank constant; default HYBRID_RANK_CONSTANT. */
+  /** Hybrid: RRF rank constant; default HYBRID_RANK_CONSTANT. */
   rankConstant?: number;
   /** Hybrid: fused candidate window; default HYBRID_WINDOW_SIZE. */
   hybridWindow?: number;
-  /** Passage (M7.3): fused candidate window; default PASSAGE_WINDOW_SIZE. */
+  /** Passage: fused candidate window; default PASSAGE_WINDOW_SIZE. */
   passageWindow?: number;
   /** Passage: max chunks per parent document; default PASSAGE_MAX_PER_DOC. */
   passageMaxPerDoc?: number;

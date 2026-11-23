@@ -1,7 +1,7 @@
 import type { PassageResultItem } from "../../search/types/search.types.js";
 
 /**
- * Context construction (M7.4): turns retrieved passages into the numbered
+ * Context construction: turns retrieved passages into the numbered
  * document block the LLM cites from. Pure function - fully unit-testable.
  *
  * Format:

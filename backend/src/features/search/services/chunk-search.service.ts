@@ -22,7 +22,7 @@ import type {
 import type { SearchQuery } from "../validators/search.validators.js";
 
 /* ------------------------------------------------------------------ */
-/* Passage search (M7.3) - hybrid retrieval over the chunk index.      */
+/* Passage search - hybrid retrieval over the chunk index.              */
 /*                                                                     */
 /* Same architecture as document-level hybrid: BM25 + kNN fused by    */
 /* application-level RRF (reuse of fuseRrf), then collapsed to at most */

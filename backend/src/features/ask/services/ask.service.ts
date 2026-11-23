@@ -13,7 +13,7 @@ import type {
 import type { SearchDeps } from "../../search/types/search.types.js";
 
 /* ------------------------------------------------------------------ */
-/* RAG orchestration (M7.3/M7.4)                                       */
+/* RAG orchestration                                                    */
 /*                                                                     */
 /* question -> passage retrieval (existing hybrid-on-chunks) ->         */
 /* numbered context -> LLM structured answer -> backend-validated      */

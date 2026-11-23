@@ -1,7 +1,7 @@
 import { AppError } from "../../../shared/errors/app-error.js";
 
 /**
- * LLM provider seam (M7.4) - the same pattern as EmbeddingProvider:
+ * LLM provider seam - the same pattern as EmbeddingProvider:
  * business logic depends on this interface only; the concrete adapter
  * (Anthropic today) is resolved from environment configuration and
  * injected in tests through `llmDeps`.

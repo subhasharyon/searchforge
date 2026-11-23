@@ -43,7 +43,7 @@ const BOILERPLATE_SELECTORS = [
   // match like `[class*="sidebar"]` removes layout wrappers whose classes
   // merely mention sidebars ("with-sidebar", "grid-cols-sidebar-content")
   // and destroys the content inside them. Verified against
-  // docs.docker.com + react.dev markup (M7.5 fix).
+  // docs.docker.com + react.dev markup.
   'aside[class*="sidebar"], nav[class*="sidebar"], details[class*="sidebar"]',
   '[class~="sidebar"], [id="sidebar"]',
   '[class^="sidebar-"], [class*=" sidebar-"]',

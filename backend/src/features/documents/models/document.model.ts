@@ -69,7 +69,7 @@ const documentSchema = new Schema<IDocument>(
     publishedAt: {
       type: Date,
     },
-    // Derived embedding state (M7.1). Canonical enough to rebuild ES from
+    // Derived embedding state. Canonical enough to rebuild ES from
     // Mongo alone; staleness is decided by comparing embeddedContentHash
     // and embeddingModel against the live provider.
     contentVector: {

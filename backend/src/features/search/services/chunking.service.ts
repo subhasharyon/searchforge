@@ -1,5 +1,5 @@
 /**
- * Structure-aware document chunking (M7.3).
+ * Structure-aware document chunking.
  *
  * Pure function: same input always produces the same chunk list, which is
  * what makes ES chunk _ids (`{docId}:{index}`) deterministic and re-indexing

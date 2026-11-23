@@ -7,7 +7,7 @@ import {
 } from "./llm.provider.js";
 
 /**
- * Google AI Studio Gemini adapter (M7.4) — generateContent REST API,
+ * Google AI Studio Gemini adapter — generateContent REST API,
  * chosen for the free developer tier. No SDK dependency: the request
  * contract mirrors the OpenAI-compat embedding adapter (raw fetch,
  * bounded retries, AbortSignal timeout).

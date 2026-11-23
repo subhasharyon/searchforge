@@ -9,3 +9,6 @@ coverage/
 *.log
 .DS_Store
 reports/
+
+# local agent/tooling notes - keep out of the public repo
+AGENTS.md

@@ -8,7 +8,7 @@ import {
 } from "./llm.provider.js";
 
 /**
- * Anthropic Messages API adapter (M7.4).
+ * Anthropic Messages API adapter.
  *
  * Structured output uses `tool_choice: forced` so the model's reply is
  * always a parseable JSON payload - never free text we have to scrape

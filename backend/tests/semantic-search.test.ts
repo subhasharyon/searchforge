@@ -317,7 +317,7 @@ describe("syncDocumentToIndex embedding behaviour", () => {
     const doc = await makeDoc();
     await syncDocumentToIndex(doc, { client, embeddingProvider: provider });
     // Two embedDocuments calls: one for the document vector, one batched
-    // call for the chunk projection (M7.3).
+    // call for the chunk projection.
     expect(provider.embedDocuments).toHaveBeenCalledTimes(2);
     const indexed = calls.find((c) => c.method === "index")!.arg as {
       document: { content_vector?: number[]; embeddingModel?: string };
@@ -354,8 +354,8 @@ describe("syncDocumentToIndex embedding behaviour", () => {
     });
     await syncDocumentToIndex(doc, { client, embeddingProvider: provider });
     // The document vector is fresh so ensureDocumentEmbedding skips it;
-    // the single call is the chunk projection's batch (M7.3 rebuilds
-    // chunks on every sync).
+    // the single call is the chunk projection's batch (chunk sync
+    // embeds on every document sync).
     expect(provider.embedDocuments).toHaveBeenCalledTimes(1);
   });
 

@@ -154,7 +154,7 @@ export const removeDocument = async (
 /* ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------ */
-/* Chunk projection (M7.3)                                             */
+/* Chunk projection                                                     */
 /*                                                                     */
 /* Chunks are derived data in a separate index family. On every doc   */
 /* sync the chunk set is replaced wholesale (delete-by-query then      */

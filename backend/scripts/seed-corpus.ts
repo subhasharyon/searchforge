@@ -1,5 +1,5 @@
 /**
- * Real-corpus seeder (M7.3): fetches curated public documentation pages
+ * Real-corpus seeder: fetches curated public documentation pages
  * through the SSRF-safe fetcher + markdown extractor and ingests them
  * through the canonical pipeline - which also builds the chunk index.
  *

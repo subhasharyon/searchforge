@@ -1,5 +1,5 @@
 /**
- * /api/v1/ask response contract (M7.4 backend).
+ * /api/v1/ask response contract.
  */
 
 export interface AskCitation {

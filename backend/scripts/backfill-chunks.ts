@@ -1,5 +1,5 @@
 /**
- * One-off chunk backfill for documents that predate M7.3: rebuilds the
+ * One-off chunk backfill for documents ingested before the chunk index existed: rebuilds the
  * chunk projection for every Mongo document through the same
  * syncChunksToIndex path ingestion uses. Idempotent - safe to re-run.
  *

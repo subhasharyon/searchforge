@@ -53,7 +53,7 @@ const envSchema = z.object({
       "TRUST_PROXY=true trusts arbitrary X-Forwarded-For and defeats rate limiting"
     ),
 
-  // Semantic-search embedding provider (M7.1).
+  // Semantic-search embedding provider.
   // "disabled": no vector work anywhere; keyword search is unaffected and
   // mode=semantic returns 503. "local": deterministic feature-hashing
   // vectors for development/testing - NO real semantics. "openai-compat":
@@ -69,7 +69,7 @@ const envSchema = z.object({
   EMBEDDING_DIMS: z.coerce.number().int().positive().optional(),
   EMBEDDING_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
 
-  // RAG answer-generation provider (M7.4).
+  // RAG answer-generation provider.
   // "disabled": POST /api/v1/ask returns 503 LLM_UNAVAILABLE. "anthropic":
   // Anthropic Messages API via @anthropic-ai/sdk; "gemini": Google AI
   // Studio generateContent REST API (free developer tier). Enabled

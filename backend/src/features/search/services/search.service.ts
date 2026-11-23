@@ -199,7 +199,7 @@ export const searchDocuments = async (
 };
 
 /* ------------------------------------------------------------------ */
-/* Semantic search (M7.1)                                              */
+/* Semantic search                                                      */
 /*                                                                     */
 /* kNN pagination limitation: Elasticsearch's `knn` retrieval has no   */
 /* `from` offset - it always returns the top-k neighbors. We therefore */
@@ -304,7 +304,7 @@ export const semanticSearchDocuments = async (
 };
 
 /* ------------------------------------------------------------------ */
-/* Hybrid search (M7.2) - application-level reciprocal rank fusion.    */
+/* Hybrid search - application-level reciprocal rank fusion.            */
 /*                                                                     */
 /* Native `retriever.rrf` requires an Enterprise license, so fusion    */
 /* runs in-process: BM25 and kNN each return a windowed ranked list,   */
