@@ -1,0 +1,5 @@
+{$DOMAIN}
+
+# The backend is not exposed: every browser-facing request is the Next.js
+# server, which talks to the API over the internal docker network.
+reverse_proxy frontend:3000
