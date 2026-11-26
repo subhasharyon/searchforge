@@ -31,10 +31,19 @@ internet ──HTTPS──> VM-web: Caddy :443 ──> frontend :3000
 Deploy order (each VM needs Docker + a 2GB swap file — 1GB RAM is tight):
 
 ```bash
-# both VMs
+# both VMs — swap
 sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+# both VMs — Docker (Ubuntu/Canonical image; use the CentOS repo on Oracle Linux)
+sudo apt-get update && sudo apt-get install -y ca-certificates curl gnupg git iptables-persistent
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update && sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+sudo usermod -aG docker ubuntu && newgrp docker
 
 # VM-api first
 git clone <repo> && cd searchforge/infrastructure
@@ -53,10 +62,20 @@ docker compose -f docker-compose.api.yml --env-file .env.api \
   exec backend npx tsx scripts/backfill-chunks.ts
 ```
 
-Firewall: VM-web needs public ingress 80/443 (OCI security list +
-`firewall-cmd`); VM-api needs nothing public — the default security list
-already allows VCN-internal traffic to :5000/:6379, but open them on the
-OS firewall: `sudo firewall-cmd --permanent --add-port=5000/tcp --add-port=6379/tcp && sudo firewall-cmd --reload`.
+Firewall (two layers — OCI security list AND the OS firewall; Ubuntu images
+block everything except SSH by default):
+
+```bash
+# VM-web — OCI security list ingress 0.0.0.0/0 TCP 80 + 443, plus:
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save
+
+# VM-api — VCN-internal traffic only (default security list allows it), plus:
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 5000 -j ACCEPT
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 6379 -j ACCEPT
+sudo netfilter-persistent save
+```
 
 ## Production topology
 
