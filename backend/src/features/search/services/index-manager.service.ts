@@ -192,6 +192,65 @@ const CHUNK_INDEX: IndexSpec = {
 
 const indicesOf = (client: EsClientLike) => client.indices;
 
+/**
+ * Elasticsearch Serverless manages shards/replicas itself and rejects
+ * index `settings` in create calls ("not available when running in
+ * serverless mode"). Detect the flavor once per client (version info),
+ * then omit settings for that client. Detection failures default to a
+ * hosted cluster; the create fallback below still catches a missed
+ * serverless cluster by its error message.
+ */
+const serverlessCache = new WeakMap<EsClientLike, boolean>();
+
+const isServerless = async (client: EsClientLike): Promise<boolean> => {
+  const cached = serverlessCache.get(client);
+  if (cached !== undefined) {
+    return cached;
+  }
+  let serverless = false;
+  try {
+    const info = await client.info?.();
+    const version = info?.version as Record<string, unknown> | undefined;
+    serverless =
+      info?.flavor === "serverless" ||
+      version?.build_flavor === "serverless";
+  } catch {
+    serverless = false;
+  }
+  serverlessCache.set(client, serverless);
+  return serverless;
+};
+
+const isServerlessError = (error: unknown): boolean =>
+  error instanceof Error && /serverless/i.test(error.message);
+
+const createIndex = async (
+  client: EsClientLike,
+  spec: IndexSpec,
+  indexName: string
+): Promise<void> => {
+  const create = (settings?: Record<string, unknown>) =>
+    indicesOf(client).create({
+      index: indexName,
+      ...(settings ? { settings } : {}),
+      mappings: spec.buildMappings(resolveVectorDims()),
+    });
+
+  if (await isServerless(client)) {
+    await create();
+    return;
+  }
+  try {
+    await create(spec.settings);
+  } catch (error) {
+    if (!isServerlessError(error)) {
+      throw error;
+    }
+    serverlessCache.set(client, true);
+    await create();
+  }
+};
+
 /** Concrete index names currently pointed at by the alias, if any. */
 const aliasTargets = async (
   client: EsClientLike,
@@ -233,11 +292,7 @@ const ensureIndex = async (
 
   const initialIndex = `${spec.base}${INITIAL_VERSION}`;
   if (!(await indicesOf(client).exists({ index: initialIndex }))) {
-    await indicesOf(client).create({
-      index: initialIndex,
-      settings: spec.settings,
-      mappings: spec.buildMappings(resolveVectorDims()),
-    });
+    await createIndex(client, spec, initialIndex);
     logger.info({ index: initialIndex }, "created search index");
   }
 
@@ -253,11 +308,7 @@ const createNext = async (
   const previousTargets = await aliasTargets(client, spec);
   const indexName = `${spec.base}${(await currentVersion(client, spec)) + 1}`;
 
-  await indicesOf(client).create({
-    index: indexName,
-    settings: spec.settings,
-    mappings: spec.buildMappings(resolveVectorDims()),
-  });
+  await createIndex(client, spec, indexName);
   return { indexName, previousTargets };
 };
 

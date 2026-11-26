@@ -130,6 +130,8 @@ export interface EsSearchResponse {
 }
 
 export interface EsClientLike {
+  /** Cluster info (GET /); used to detect serverless deployments. */
+  info?(): Promise<Record<string, unknown>>;
   indices: {
     exists(opts: { index: string }): Promise<boolean>;
     create(opts: {

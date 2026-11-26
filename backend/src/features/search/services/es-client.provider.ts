@@ -20,6 +20,7 @@ export const searchIndexDeps: { client?: EsClientLike } = {};
  * cluster from inside the test suite.
  */
 const noopClient: EsClientLike = {
+  info: async () => ({}),
   indices: {
     exists: async () => true,
     create: async () => ({}),
@@ -41,6 +42,8 @@ const noopClient: EsClientLike = {
 let defaultClient: EsClientLike | undefined;
 
 const adaptClient = (client: Client): EsClientLike => ({
+  info: async () =>
+    client.info() as unknown as Promise<Record<string, unknown>>,
   indices: {
     exists: async (opts) => client.indices.exists(opts),
     create: async (opts) => client.indices.create(opts),
