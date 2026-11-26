@@ -7,7 +7,9 @@ export const getHealthStatus = async () => {
   const [mongoResult, elasticResult, redisResult] =
     await Promise.allSettled([
       mongoose.connection.db?.admin().ping(),
-      elasticsearchClient.cluster.health(),
+      // ping() works on hosted clusters and serverless alike; _cluster/health
+      // is unavailable in serverless mode.
+      elasticsearchClient.ping(),
       redisClient.ping(),
     ]);
 
