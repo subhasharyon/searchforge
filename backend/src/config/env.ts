@@ -101,7 +101,17 @@ const envSchema = z.object({
     .default("7d"),
 });
 
-const parsedEnv = envSchema.safeParse(process.env);
+// Compose `${VAR:-}` defaults inject empty strings for unset vars; an empty
+// string must behave as "unset" so optional()/default() fields don't fail
+// validation (z.url() rejects "", z.coerce.number() coerces it to 0).
+const normalizedEnv = Object.fromEntries(
+  Object.entries(process.env).map(([key, value]) => [
+    key,
+    value === "" ? undefined : value,
+  ])
+);
+
+const parsedEnv = envSchema.safeParse(normalizedEnv);
 
 if (!parsedEnv.success) {
   console.error("Invalid environment configuration:");
