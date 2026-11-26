@@ -7,6 +7,7 @@
  * backend never sees a shared service identity for user-facing calls.
  */
 
+import { headers } from "next/headers"
 import {
   ApiError,
   parseEnvelope,
@@ -28,9 +29,18 @@ export async function authorizedJson<T>(
     throw new ApiError("auth", "No active user session")
   }
 
+  // Forward the real client IP so the backend's rate limiting keys on the
+  // visitor, not this server's address, when the API lives on another host.
+  const inbound = await headers();
+  const clientIp = inbound.get("x-forwarded-for");
+
   const res = await rawFetch(path, {
     ...init,
-    headers: { Authorization: `Bearer ${token}`, ...init.headers },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(clientIp ? { "x-forwarded-for": clientIp } : {}),
+      ...init.headers,
+    },
   });
 
   if (res.status === 401) {

@@ -1,11 +1,62 @@
 # Deployment
 
-Two compose stacks live here:
+Compose stacks living here:
 
 | File | Purpose |
 |---|---|
 | `docker-compose.yml` | Local dev datastores only (ES, Mongo, Redis, Kibana) — apps run via `npm run dev` |
 | `docker-compose.prod.yml` | Full stack for a single VM — ES, Mongo, Redis, backend, frontend, Caddy |
+| `docker-compose.web.yml` | Two-VM split — web tier (Caddy + frontend) on the public VM |
+| `docker-compose.api.yml` | Two-VM split — API tier (backend + Redis) on the private VM |
+
+## Two-VM split (Oracle Always Free, `VM.Standard.E2.1.Micro`)
+
+```
+internet ──HTTPS──> VM-web: Caddy :443 ──> frontend :3000
+                            │ SEARCH_API_URL / REDIS_URL over VCN private net
+                            ▼
+                     VM-api: backend :5000, redis :6379 (private IP only)
+                            │────> Elastic Cloud (managed ES, API key)
+                            └────> MongoDB Atlas M0
+```
+
+- `VM-web` (`VM.Standard.E2.1.Micro`, public IP): Caddy + frontend only.
+- `VM-api` (same shape, **no public IP**): backend + Redis, reachable only
+  inside the VCN — `TRUST_PROXY` is set to the web VM's private IP, and the
+  frontend forwards `X-Forwarded-For` so rate limiting still keys on real
+  client IPs.
+- Datastores are external managed services: Elastic Cloud (`ELASTICSEARCH_URL`
+  + scoped API key) and MongoDB Atlas (`MONGODB_URI`).
+
+Deploy order (each VM needs Docker + a 2GB swap file — 1GB RAM is tight):
+
+```bash
+# both VMs
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+
+# VM-api first
+git clone <repo> && cd searchforge/infrastructure
+cp .env.api.example .env.api    # fill DOMAIN, MONGODB_URI, ELASTICSEARCH_URL, secrets
+docker compose -f docker-compose.api.yml --env-file .env.api up -d --build
+
+# then VM-web
+git clone <repo> && cd searchforge/infrastructure
+cp .env.web.example .env.web    # fill DOMAIN, API_VM_IP, REDIS_PASSWORD
+docker compose -f docker-compose.web.yml --env-file .env.web up -d --build
+
+# seed from VM-api (datastores + scripts live there)
+docker compose -f docker-compose.api.yml --env-file .env.api \
+  exec backend npx tsx scripts/seed-corpus.ts
+docker compose -f docker-compose.api.yml --env-file .env.api \
+  exec backend npx tsx scripts/backfill-chunks.ts
+```
+
+Firewall: VM-web needs public ingress 80/443 (OCI security list +
+`firewall-cmd`); VM-api needs nothing public — the default security list
+already allows VCN-internal traffic to :5000/:6379, but open them on the
+OS firewall: `sudo firewall-cmd --permanent --add-port=5000/tcp --add-port=6379/tcp && sudo firewall-cmd --reload`.
 
 ## Production topology
 

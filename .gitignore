@@ -3,6 +3,8 @@
 !.env.example
 !*.env.example
 !.env.production.example
+!.env.api.example
+!.env.web.example
 
 node_modules/
 dist/

@@ -1,0 +1,86 @@
+# API tier — runs on the private VM (searchforge-api), no public IP needed.
+#
+#   cp .env.api.example .env.api   # fill in secrets
+#   docker compose -f docker-compose.api.yml --env-file .env.api up -d --build
+#
+# Publishes backend :5000 and redis :6379 on the VM's VCN-private address only
+# (the instance has no public IP, so nothing here is internet-reachable).
+# Elasticsearch and MongoDB are external managed services — see .env.api.
+
+name: searchforge-api
+
+services:
+  redis:
+    image: redis:8.0-alpine
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --requirepass
+      - ${REDIS_PASSWORD}
+    ports:
+      # Frontend on the web VM reaches this over the VCN private network.
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - 'redis-cli -a "$${REDIS_PASSWORD}" ping | grep -q PONG'
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../backend
+    ports:
+      # Frontend on the web VM calls this over the VCN private network.
+      - "5000:5000"
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      # The Next.js server on the web VM is the only caller and the only
+      # proxy hop — it forwards the real client IP via X-Forwarded-For.
+      TRUST_PROXY: ${TRUST_PROXY:-10.0.0.70}
+      CORS_ORIGIN: https://${DOMAIN}
+      MONGODB_URI: ${MONGODB_URI}
+      ELASTICSEARCH_URL: ${ELASTICSEARCH_URL}
+      ELASTICSEARCH_API_KEY: ${ELASTICSEARCH_API_KEY:-}
+      ELASTICSEARCH_USERNAME: ${ELASTICSEARCH_USERNAME:-elastic}
+      ELASTICSEARCH_APP_PASSWORD: ${ELASTICSEARCH_APP_PASSWORD:-}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      AUTH_CREDENTIAL_RATE_LIMIT: ${AUTH_CREDENTIAL_RATE_LIMIT:-20}
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-disabled}
+      EMBEDDING_API_URL: ${EMBEDDING_API_URL:-}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      EMBEDDING_DIMS: ${EMBEDDING_DIMS:-}
+      EMBEDDING_TIMEOUT_MS: ${EMBEDDING_TIMEOUT_MS:-10000}
+      LLM_PROVIDER: ${LLM_PROVIDER:-disabled}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_API_URL: ${LLM_API_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_MAX_TOKENS: ${LLM_MAX_TOKENS:-1024}
+      LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-30000}
+      ASK_RATE_LIMIT: ${ASK_RATE_LIMIT:-30}
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:5000/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  redis_data:
