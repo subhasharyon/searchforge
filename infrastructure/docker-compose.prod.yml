@@ -53,6 +53,8 @@ services:
 
   redis:
     image: redis:8.0-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     command:
       - redis-server
       - --appendonly
